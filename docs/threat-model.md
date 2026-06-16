@@ -25,7 +25,11 @@ the contract reference; this file is the security reasoning.
   Its entrypoint is the stdio bridge (`src/interfaces/mcp/stdio-bridge.ts`), which
   opens **no network listener** and imports no HTTP server. `assertLocalFlavor`
   makes it fail loudly if pointed at the hosted flavor, so the unauthenticated
-  path cannot be re-pointed at a network listener. Audit/log output goes to
+  path cannot be re-pointed at a network listener. The reverse is also blocked:
+  the HTTP listener path (`src/server.ts` + `createHttpApp`) calls
+  `assertHostedFlavor` and **refuses to start under `local-binary`**, so the
+  network `/mcp` listener can never be wired to the no-auth local flavor — even
+  though `local-binary` is the default when no flavor env is set. Audit/log output goes to
   **stderr** only, keeping stdout as the JSON-RPC channel and avoiding leaking
   metadata into the protocol stream. The local flavor reuses the **same** guarded
   egress primitive as hosted mode — SSRF controls are not relaxed for "local".

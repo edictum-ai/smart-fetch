@@ -9,7 +9,7 @@ import { createDefaultLlmTransformer } from "./infrastructure/llm/model-router.t
 import { PlaywrightRenderer } from "./infrastructure/render/index.ts";
 import { createTidbStore } from "./infrastructure/tidb/index.ts";
 import type { StorePort } from "./application/ports/store.ts";
-import { createHttpApp } from "./interfaces/http/app.ts";
+import { assertHostedFlavor, createHttpApp } from "./interfaces/http/app.ts";
 
 const clock: ClockPort = { nowMs: () => Date.now() };
 const audit: AuditLoggerPort = {
@@ -21,6 +21,10 @@ const audit: AuditLoggerPort = {
   },
 };
 const runtime = loadAuthRuntimeConfig();
+// This entrypoint opens a network listener. It is hosted-only: refuse to start
+// it under the local-binary flavor (which has no OAuth boundary). Local mode is
+// served over stdio (`pnpm run bridge`) and never opens a port.
+assertHostedFlavor(runtime);
 const host = config.http.host();
 const port = config.http.port();
 const security = mcpSecurity(runtime, host, port);

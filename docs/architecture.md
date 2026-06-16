@@ -141,7 +141,11 @@ server. Invariants:
 
 - **No network listener.** The bridge opens no port and imports no HTTP server.
   `assertLocalFlavor` makes it **fail loudly** if pointed at the `hosted` flavor,
-  so the unauthenticated local path can never become network-exposed.
+  so the unauthenticated local path can never become network-exposed. The guard is
+  symmetric on the HTTP side: `assertHostedFlavor` (in `src/interfaces/http/app.ts`,
+  called by both `createHttpApp` and the `src/server.ts` listener entrypoint)
+  **refuses to build or listen** under the `local-binary` flavor, so the network
+  `/mcp` listener can never serve the no-auth local flavor (defaults included).
 - **stdout is the JSON-RPC channel.** All audit/log output goes to **stderr**.
 - **SSRF still applies.** Every fetch routes through the same `guardedFetch`
   primitive; guarded-fetch rejections produce the same contract-shaped

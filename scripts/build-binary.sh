@@ -60,7 +60,18 @@ fi
 # Startup self-check: a self-contained binary must load all bundled native modules
 # and reach the stdio "ready" line. Empty stdin closes the transport so it exits.
 echo "Self-check: starting ${OUT} to confirm it loads its bundled modules"
-check_err="$(mktemp)"
+# Capture startup stderr in a PROJECT-LOCAL temp file. The system temp dir can be
+# unwritable (e.g. sandboxes return `mktemp: Operation not permitted`); a failed
+# mktemp must be a clear packaging blocker, not a silent empty path that lets the
+# self-check "pass" against nothing. dist/ is writable (created above).
+check_err="$(mktemp "dist/.selfcheck-stderr.XXXXXX" 2>/dev/null || true)"
+if [ -z "${check_err}" ] || [ ! -f "${check_err}" ]; then
+  echo "error: could not create a writable temp file for the startup self-check (tried under dist/)." >&2
+  echo "Packaging blocker: refusing to claim success without actually running the binary self-check." >&2
+  echo "See docs/architecture.md (\"Self-contained local binary\")." >&2
+  rm -f "${OUT}"
+  exit 1
+fi
 "./${OUT}" </dev/null >/dev/null 2>"${check_err}" &
 bin_pid=$!
 ( sleep 8; kill "${bin_pid}" 2>/dev/null ) &
