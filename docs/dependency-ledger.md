@@ -31,6 +31,19 @@ corepack pnpm run check:syntax && corepack pnpm run check:lines && corepack pnpm
 (Note: `corepack pnpm run check` nests `pnpm run …` which can re-resolve to the
 fnm binary; run the three sub-scripts directly as above.)
 
+## Toolchain note: Bun for local-binary packaging (external tool, no npm pin)
+
+The self-contained local binary is produced by `pnpm run build:binary`
+(`scripts/build-binary.sh`) using `bun build … --compile`. **Bun is an external
+developer tool, not an npm dependency** — no package was added to `package.json`
+or the lockfile for packaging, so the 15-day `minimumReleaseAge` gate is not
+engaged by this work. The stdio bridge itself runs under the pinned Node 24
+toolchain via `pnpm run bridge`; Bun is required only to emit the single-file
+artifact. When Bun is absent, the build script exits non-zero with the exact
+command to run on a Bun-equipped machine and produces no artifact. If a future
+change needs an npm package for packaging, it must be added here and clear the
+15-day rule first.
+
 ## Direct dependencies, dev dependencies, and runtime pins
 
 | Name | Proposed pin | Release/publish date | Date checked | Source URL | Reason |

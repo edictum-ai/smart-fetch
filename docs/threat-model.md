@@ -22,6 +22,13 @@ the contract reference; this file is the security reasoning.
   `REDACTED_TIDB_HOST:4000`.
 - The **local-binary flavor has no network trust boundary** — it is single-user /
   single-agent only and runs without auth. It must never be exposed on a network.
+  Its entrypoint is the stdio bridge (`src/interfaces/mcp/stdio-bridge.ts`), which
+  opens **no network listener** and imports no HTTP server. `assertLocalFlavor`
+  makes it fail loudly if pointed at the hosted flavor, so the unauthenticated
+  path cannot be re-pointed at a network listener. Audit/log output goes to
+  **stderr** only, keeping stdout as the JSON-RPC channel and avoiding leaking
+  metadata into the protocol stream. The local flavor reuses the **same** guarded
+  egress primitive as hosted mode — SSRF controls are not relaxed for "local".
 
 ## Required Controls
 

@@ -1,0 +1,78 @@
+import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import type { AuditLoggerPort } from "../../application/ports/audit.ts";
+import type { ClockPort } from "../../application/ports/clock.ts";
+import type { FetcherPort } from "../../application/ports/fetcher.ts";
+import type { RenderPort } from "../../application/ports/renderer.ts";
+import type { TransformPort } from "../../application/ports/transformer.ts";
+import {
+  loadAuthRuntimeConfig,
+  type AuthRuntimeConfig,
+} from "../../application/use-cases/oauth-config.ts";
+import { createRequestAuthorizer } from "../../application/use-cases/request-auth.ts";
+import { createSmartFetchUseCase } from "../../application/use-cases/smart-fetch.ts";
+import type { HtmlExtractor } from "../../application/use-cases/tier1-extract.ts";
+import { createSmartFetchMcpServer } from "./server.ts";
+
+/**
+ * Thrown when the local stdio bridge is asked to run under a non-local flavor.
+ * The local binary has no auth boundary, so it must never be wired to the hosted
+ * (network-listener) path — that would expose an unauthenticated surface.
+ */
+export class LocalFlavorError extends Error {
+  readonly code = "local_flavor_required";
+}
+
+export interface LocalMcpDeps {
+  fetcher: FetcherPort;
+  extractHtml: HtmlExtractor;
+  clock: ClockPort;
+  audit: AuditLoggerPort;
+  transformer?: TransformPort;
+  renderer?: RenderPort;
+  /** Defaults to the process-resolved runtime config; must be local-binary. */
+  runtime?: AuthRuntimeConfig;
+}
+
+/**
+ * Fail loudly if local mode is pointed at the hosted flavor. The stdio bridge is
+ * single-user/single-agent and opens no network listener; the hosted flavor owns
+ * OAuth + the HTTP listener and is reached only through `src/server.ts`.
+ */
+export function assertLocalFlavor(runtime: AuthRuntimeConfig): void {
+  if (runtime.flavor !== "local-binary") {
+    throw new LocalFlavorError(
+      "Local stdio bridge runs only under the local-binary flavor; " +
+        "refusing to start a hosted/network-listener path with no OAuth boundary.",
+    );
+  }
+}
+
+/**
+ * Build the same MCP server the hosted `POST /mcp` route serves, but for the
+ * self-contained local-binary flavor: identical `smart_fetch` tool (same schema,
+ * same core use case, same guarded fetch), single-user local auth, no OAuth
+ * secrets, and no network transport. The caller attaches a stdio transport.
+ */
+export async function createLocalMcpServer(deps: LocalMcpDeps): Promise<Server> {
+  const runtime = deps.runtime ?? loadAuthRuntimeConfig();
+  assertLocalFlavor(runtime);
+  const authorizer = createRequestAuthorizer({
+    runtime,
+    clock: deps.clock,
+    audit: deps.audit,
+  });
+  const auth = await authorizer.authorize({});
+  const smartFetch = createSmartFetchUseCase({
+    fetcher: deps.fetcher,
+    extractHtml: deps.extractHtml,
+    transformer: deps.transformer,
+    renderer: deps.renderer,
+    clock: deps.clock,
+  });
+  return createSmartFetchMcpServer({
+    smartFetch,
+    auth,
+    audit: deps.audit,
+    clock: deps.clock,
+  });
+}
