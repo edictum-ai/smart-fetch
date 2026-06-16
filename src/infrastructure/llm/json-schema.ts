@@ -18,28 +18,32 @@ function validateAt(
   value: unknown,
   schema: Record<string, unknown>,
   path: string,
-  seen: Set<Record<string, unknown>>,
+  stack: Set<Record<string, unknown>>,
 ): SchemaValidationResult {
-  if (seen.has(schema)) return { valid: true };
-  seen.add(schema);
+  if (stack.has(schema)) return { valid: true };
+  stack.add(schema);
 
-  const enumResult = validateEnum(value, schema, path);
-  if (!enumResult.valid) return enumResult;
+  try {
+    const enumResult = validateEnum(value, schema, path);
+    if (!enumResult.valid) return enumResult;
 
-  const typeResult = validateType(value, schema, path);
-  if (!typeResult.valid) return typeResult;
+    const typeResult = validateType(value, schema, path);
+    if (!typeResult.valid) return typeResult;
 
-  if (schema.type === "object" || isRecord(value)) {
-    const objectResult = validateObject(value, schema, path, seen);
-    if (!objectResult.valid) return objectResult;
+    if (schema.type === "object" || isRecord(value)) {
+      const objectResult = validateObject(value, schema, path, stack);
+      if (!objectResult.valid) return objectResult;
+    }
+
+    if (schema.type === "array" || Array.isArray(value)) {
+      const arrayResult = validateArray(value, schema, path, stack);
+      if (!arrayResult.valid) return arrayResult;
+    }
+
+    return { valid: true };
+  } finally {
+    stack.delete(schema);
   }
-
-  if (schema.type === "array" || Array.isArray(value)) {
-    const arrayResult = validateArray(value, schema, path, seen);
-    if (!arrayResult.valid) return arrayResult;
-  }
-
-  return { valid: true };
 }
 
 function validateEnum(value: unknown, schema: Record<string, unknown>, path: string): SchemaValidationResult {
@@ -65,7 +69,7 @@ function validateObject(
   value: unknown,
   schema: Record<string, unknown>,
   path: string,
-  seen: Set<Record<string, unknown>>,
+  stack: Set<Record<string, unknown>>,
 ): SchemaValidationResult {
   if (!isRecord(value)) return { valid: false, message: `${path} must be object` };
   const required = Array.isArray(schema.required) ? schema.required : [];
@@ -78,7 +82,7 @@ function validateObject(
   const properties = isRecord(schema.properties) ? schema.properties : {};
   for (const [key, propertySchema] of Object.entries(properties)) {
     if (!(key in value) || !isRecord(propertySchema)) continue;
-    const result = validateAt(value[key], propertySchema, `${path}.${key}`, seen);
+    const result = validateAt(value[key], propertySchema, `${path}.${key}`, stack);
     if (!result.valid) return result;
   }
 
@@ -94,12 +98,12 @@ function validateArray(
   value: unknown,
   schema: Record<string, unknown>,
   path: string,
-  seen: Set<Record<string, unknown>>,
+  stack: Set<Record<string, unknown>>,
 ): SchemaValidationResult {
   if (!Array.isArray(value)) return { valid: false, message: `${path} must be array` };
   if (!isRecord(schema.items)) return { valid: true };
   for (let index = 0; index < value.length; index += 1) {
-    const result = validateAt(value[index], schema.items, `${path}[${index}]`, seen);
+    const result = validateAt(value[index], schema.items, `${path}[${index}]`, stack);
     if (!result.valid) return result;
   }
   return { valid: true };

@@ -101,6 +101,30 @@ test("output extract validates provider JSON against requested schema", async ()
   assert.deepEqual(result.errors, []);
 });
 
+test("output extract rejects later array item that violates item schema", async () => {
+  const provider = new RecordingProvider(
+    candidate("openrouter", "free/model", { free: true }),
+    { text: "[\"ok\",123]" },
+  );
+  const schema = { type: "array", items: { type: "string" } };
+  const transformer = new LlmTransformer({
+    router: new ModelRouter(provider.candidates()),
+    providers: { openrouter: provider },
+    clock: new FakeClock([10, 15]),
+  });
+
+  const result = await createSmartFetchUseCase({
+    fetcher: new FakeFetcher(fetchResult({ html: "<main>extract</main>" })),
+    extractHtml: new FakeExtractor(extraction({ text: "Original array source" })).extract,
+    transformer,
+    clock: new FakeClock([0, 4, 5, 5, 8, 8]),
+  }).execute({ url: "https://extract.test/array", output: "extract", schema });
+
+  assert.equal(result.output, "raw");
+  assert.equal(result.result, "Original array source");
+  assert.deepEqual(result.errors, [{ code: "extract_schema_invalid", message: "$[1] must be string" }]);
+});
+
 test("output extract invalid JSON returns structured error and keeps fetch provenance", async () => {
   const provider = new RecordingProvider(candidate("openrouter", "free/model", { free: true }), { text: "not json" });
   const transformer = new LlmTransformer({

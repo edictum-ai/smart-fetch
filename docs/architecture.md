@@ -1,11 +1,11 @@
 # Architecture
 
 Status: v1 direction. The guarded egress primitive, Tier-1 extraction,
-adapter registry seam, gated Tier-3 render, OAuth state stores, and hosted
-OAuth route/use-case slice are implemented; the remaining vertical slice
-(transform, MCP server) is next. This document describes the approved shape.
-`docs/contracts.md` is the source of truth for tool I/O, ports, provenance,
-OAuth, and errors; this file does not duplicate it.
+adapter registry seam, gated Tier-3 render, OAuth state stores, hosted OAuth
+route/use-case slice, and Transform router are implemented; the remaining
+vertical slice (MCP server) is next. This document describes the approved
+shape. `docs/contracts.md` is the source of truth for tool I/O, ports,
+provenance, OAuth, and errors; this file does not duplicate it.
 
 ## Shape
 
@@ -158,6 +158,6 @@ Split by layer or responsibility when a file gets close to the limit.
 
 - The guarded fetch egress primitive, Tier-1 requester seam/extraction, the
   Tier-2 adapter registry seam, gated Tier-3 Playwright render, both `StorePort`
-  impls, and hosted gateway OAuth route/use-case slice exist. The Transform
-  router and the Streamable HTTP MCP server are still pending.
-  `docs/contracts.md` describes the whole product; nothing is version-gated or deferred, it all gets built.
+  impls, hosted gateway OAuth route/use-case slice, and Transform router exist.
+  The Streamable HTTP MCP server is still pending. `docs/contracts.md` describes
+  the whole product; nothing is version-gated or deferred, it all gets built.
