@@ -56,16 +56,33 @@ export interface SaveRefreshTokenInput {
 }
 
 export interface StorePort {
-  saveAuthCode(input: SaveAuthCodeInput): void;
+  saveAuthCode(input: SaveAuthCodeInput): Promise<void>;
   /** Single-use; removes on read. Returns null if missing/expired. */
-  consumeAuthCode(codeHash: string): AuthCodeRecord | null;
-  saveRefreshToken(input: SaveRefreshTokenInput): void;
+  consumeAuthCode(codeHash: string, nowIso: string): Promise<AuthCodeRecord | null>;
+  saveRefreshToken(input: SaveRefreshTokenInput): Promise<void>;
   /** Returns the record (and rotates), or null if missing/expired/revoked. */
   rotateRefreshToken(
     tokenHash: string,
     next: SaveRefreshTokenInput,
-  ): RefreshTokenRecord | null;
+    nowIso: string,
+  ): Promise<RefreshTokenRecord | null>;
   /** Revoke every token in the family. Replay detection path. */
-  revokeRefreshTokenFamily(familyId: string): void;
-  close(): void;
+  revokeRefreshTokenFamily(familyId: string, revokedAtIso: string): Promise<void>;
+  close(): Promise<void>;
+}
+
+export class StoreInputError extends Error {
+  readonly code = "invalid_store_input";
+}
+
+export function assertSha256Hex(value: string, label: string): void {
+  if (!/^[a-f0-9]{64}$/i.test(value)) {
+    throw new StoreInputError(`${label} must be a SHA-256 hex digest`);
+  }
+}
+
+export function assertUtcIsoTimestamp(value: string, label: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) {
+    throw new StoreInputError(`${label} must be a UTC ISO timestamp`);
+  }
 }

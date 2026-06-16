@@ -60,7 +60,8 @@ the contract reference; this file is the security reasoning.
 - OAuth is **only** on the hosted flavor. The local-binary flavor has no auth, so
   it must be single-user/single-agent and never exposed on a network.
 - Authorization codes and refresh tokens are stored only as `sha256` hashes.
-- Refresh-token replay revokes the token family.
+- Refresh-token rotation keeps consumed token hashes so replay can be detected;
+  replay revokes the token family and blocks future rotations in that family.
 - Hosted production requires `OAUTH_CONSENT_SIGNING_SECRET` +
   `OAUTH_SIGNING_PRIVATE_JWK`, fail-fast at boot. If the signing JWK is not
   injected, restarts generate a new key and invalidate existing access tokens.

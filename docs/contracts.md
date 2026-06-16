@@ -82,7 +82,7 @@ core still returns a contract-shaped `Result`: `code: 0`,
 
 - **`FetcherPort`** — the single hardened egress. `fetchGuarded(url, opts) → { status, finalUrl, redirects, bodyStream, contentType, bytes } | RejectResult`. Every outbound request (Tier-1, Tier-2 adapter, every redirect hop, every Tier-3 in-browser request) routes through it.
 - **`PlatformAdapter`** — `{ id, detect(ctx): DetectResult | null, resolve(input, fetcher): Promise<ResolveResult> }`. Registered in `src/application/adapters.ts`. Optional general-purpose extension point: adding a platform = one folder under `src/infrastructure/<platform>/` + one registry line + one fixture. Not part of the public contract.
-- **`StorePort`** — OAuth state only (hosted flavor): auth-code records and refresh-token records (hashed), plus `close()`. Implemented by `src/infrastructure/sqlite/` over `node:sqlite`.
+- **`StorePort`** — OAuth state only: auth-code records and refresh-token records (hashed), plus `close()`. Implemented by `src/infrastructure/tidb/` over `mysql2` for the hosted flavor and `src/infrastructure/sqlite/` over `node:sqlite` for the local-binary flavor.
 - **`ModelRouterPort`** — `pick(task, inputTokens): { provider, model }` + `feedback(model, score)` for the bandit. Implemented by `src/infrastructure/llm/model-router.ts`.
 
 ## Tiers
@@ -145,7 +145,7 @@ OAuth state only (auth codes + refresh tokens, hashed), behind a swappable `Stor
 - **Hosted flavor → reuse the existing TiDB** from `personal-memory-infra` (EC2 `REDACTED_INSTANCE`, private `REDACTED_TIDB_HOST:4000`, MySQL protocol): add a new `smartfetch` database + a restricted `smartfetch_rw` user, and a TiDB-SG rule allowing smart-fetch's task SG on `4000/tcp` — mirroring how `personal-memory-gateway` connects (`mysql2`, `TIDB_HOST/PORT/DATABASE/USER/PASSWORD`). No new database server.
 - **Local-binary flavor → embedded `node:sqlite`** (file on disk, no server).
 
-Tables: `oauth_auth_codes` (codeHash, clientId, subject, redirectUri, resource, scopes, codeChallenge, expiresAt) and `oauth_refresh_tokens` (tokenHash, familyId, previousTokenHash, clientId, subject, scopes, expiresAt). No storage for fetched content — the service is stateless otherwise. Schema via SQL migrations (per flavor).
+Tables: `oauth_auth_codes` (code hash, client id, subject, redirect URI, resource, scopes JSON, PKCE challenge, expiry), `oauth_refresh_tokens` (token hash, family id, previous token hash, client id, subject, scopes JSON, expiry, consumed timestamp), and `oauth_refresh_token_families` (family id, revoked timestamp). Auth codes are deleted on first consume whether valid or expired. Refresh rotation atomically marks the old token consumed and inserts the next hashed token; replay of a consumed token revokes the whole family. Expiry checks use caller-supplied UTC ISO timestamps. No raw codes/tokens and no fetched content/body/cache rows are stored — the service is stateless otherwise. Schema via SQL migrations (per flavor).
 
 ## Error shape
 

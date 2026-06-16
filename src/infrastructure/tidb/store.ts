@@ -1,0 +1,176 @@
+import mysql from "mysql2/promise";
+import type { PoolOptions } from "mysql2/promise";
+import type { AuthCodeRecord, RefreshTokenRecord, SaveAuthCodeInput, SaveRefreshTokenInput, StorePort } from "../../application/ports/store.ts";
+import { assertSha256Hex, assertUtcIsoTimestamp } from "../../application/ports/store.ts";
+import type { AuthCodeRow, RefreshTokenRow } from "./records.ts";
+import { authCodeFromRow, refreshTokenFromRow, validateAuthCode, validateRefreshToken, validateRotation } from "./records.ts";
+import { migrateTidbStore } from "./schema.ts";
+import type { TidbClient, TidbExecutor, TidbTransaction } from "./types.ts";
+
+export class TidbStore implements StorePort {
+  private closed = false;
+  private readonly client: TidbClient;
+
+  constructor(client: TidbClient) {
+    this.client = client;
+  }
+
+  async saveAuthCode(input: SaveAuthCodeInput): Promise<void> {
+    this.ensureOpen();
+    validateAuthCode(input);
+    await this.client.execute(`INSERT INTO oauth_auth_codes (
+      code_hash, client_id, subject, redirect_uri, resource, scopes_json,
+      code_challenge, code_challenge_method, expires_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, authCodeParams(input));
+  }
+
+  async consumeAuthCode(codeHash: string, nowIso: string): Promise<AuthCodeRecord | null> {
+    this.ensureOpen();
+    assertSha256Hex(codeHash, "codeHash");
+    assertUtcIsoTimestamp(nowIso, "nowIso");
+    return await this.transaction(async (tx) => {
+      const row = await one<AuthCodeRow>(
+        tx,
+        `SELECT * FROM oauth_auth_codes WHERE code_hash = ? FOR UPDATE`,
+        [codeHash],
+      );
+      if (!row) return null;
+      await tx.execute(`DELETE FROM oauth_auth_codes WHERE code_hash = ?`, [codeHash]);
+      return row.expires_at > nowIso ? authCodeFromRow(row) : null;
+    });
+  }
+
+  async saveRefreshToken(input: SaveRefreshTokenInput): Promise<void> {
+    this.ensureOpen();
+    validateRefreshToken(input);
+    await this.transaction(async (tx) => {
+      await ensureFamily(tx, input.familyId);
+      await insertRefreshToken(tx, input);
+    });
+  }
+
+  async rotateRefreshToken(
+    tokenHash: string,
+    next: SaveRefreshTokenInput,
+    nowIso: string,
+  ): Promise<RefreshTokenRecord | null> {
+    this.ensureOpen();
+    validateRotation(tokenHash, next, nowIso);
+    return await this.transaction(async (tx) => {
+      const row = await one<RefreshTokenRow>(tx, `SELECT t.*, f.revoked_at
+        FROM oauth_refresh_tokens t
+        JOIN oauth_refresh_token_families f ON f.family_id = t.family_id
+        WHERE t.token_hash = ? FOR UPDATE`, [tokenHash]);
+      if (!row || row.revoked_at !== null) return null;
+      if (row.consumed_at !== null) {
+        await revokeFamily(tx, row.family_id, nowIso);
+        return null;
+      }
+      if (row.expires_at <= nowIso || next.familyId !== row.family_id) return null;
+      if (await one(tx, `SELECT token_hash FROM oauth_refresh_tokens WHERE token_hash = ?`, [
+        next.tokenHash,
+      ])) return null;
+      const [updated] = await tx.execute(
+        `UPDATE oauth_refresh_tokens SET consumed_at = ?
+          WHERE token_hash = ? AND consumed_at IS NULL`,
+        [nowIso, tokenHash],
+      );
+      if (affectedRows(updated) !== 1) return null;
+      await insertRefreshToken(tx, next);
+      return refreshTokenFromRow(row);
+    });
+  }
+
+  async revokeRefreshTokenFamily(familyId: string, revokedAtIso: string): Promise<void> {
+    this.ensureOpen();
+    assertUtcIsoTimestamp(revokedAtIso, "revokedAtIso");
+    await this.transaction(async (tx) => revokeFamily(tx, familyId, revokedAtIso));
+  }
+
+  async close(): Promise<void> {
+    if (!this.closed) {
+      await this.client.end();
+      this.closed = true;
+    }
+  }
+
+  private async transaction<T>(fn: (tx: TidbTransaction) => Promise<T>): Promise<T> {
+    const tx = await this.client.getConnection();
+    await tx.beginTransaction();
+    try {
+      const result = await fn(tx);
+      await tx.commit();
+      return result;
+    } catch (error) {
+      await tx.rollback();
+      throw error;
+    } finally {
+      tx.release();
+    }
+  }
+
+  private ensureOpen(): void {
+    if (this.closed) throw new Error("Store is closed");
+  }
+}
+
+export async function createTidbStore(options: PoolOptions): Promise<TidbStore> {
+  const client = mysql.createPool(options) as unknown as TidbClient;
+  await migrateTidbStore(client);
+  return new TidbStore(client);
+}
+
+function authCodeParams(input: SaveAuthCodeInput): unknown[] {
+  return [
+    input.codeHash,
+    input.clientId,
+    input.subject,
+    input.redirectUri,
+    input.resource,
+    JSON.stringify(input.scopes),
+    input.codeChallenge,
+    input.codeChallengeMethod,
+    input.expiresAt,
+  ];
+}
+
+async function insertRefreshToken(db: TidbExecutor, input: SaveRefreshTokenInput): Promise<void> {
+  await db.execute(`INSERT INTO oauth_refresh_tokens (
+    token_hash, family_id, previous_token_hash, client_id, subject, scopes_json,
+    expires_at, consumed_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`, [
+    input.tokenHash,
+    input.familyId,
+    input.previousTokenHash,
+    input.clientId,
+    input.subject,
+    JSON.stringify(input.scopes),
+    input.expiresAt,
+  ]);
+}
+
+async function ensureFamily(db: TidbExecutor, familyId: string): Promise<void> {
+  await db.execute(
+    `INSERT INTO oauth_refresh_token_families (family_id, revoked_at)
+      VALUES (?, NULL) ON DUPLICATE KEY UPDATE family_id = family_id`,
+    [familyId],
+  );
+}
+
+async function revokeFamily(db: TidbExecutor, familyId: string, revokedAtIso: string): Promise<void> {
+  await db.execute(
+    `INSERT INTO oauth_refresh_token_families (family_id, revoked_at)
+      VALUES (?, ?) ON DUPLICATE KEY UPDATE revoked_at = COALESCE(revoked_at, ?)`,
+    [familyId, revokedAtIso, revokedAtIso],
+  );
+}
+
+async function one<T>(db: TidbExecutor, sql: string, params?: unknown[]): Promise<T | undefined> {
+  const [rows] = await db.execute(sql, params);
+  return Array.isArray(rows) ? rows[0] as T | undefined : undefined;
+}
+
+function affectedRows(result: unknown): number {
+  if (typeof result !== "object" || result === null || !("affectedRows" in result)) return 0;
+  return Number((result as { affectedRows: unknown }).affectedRows);
+}
