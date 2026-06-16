@@ -145,8 +145,8 @@ Split by layer or responsibility when a file gets close to the limit.
 
 ## Not Implemented Yet
 
-- The guarded fetch egress primitive and Tier-1 requester seam exist. Extraction,
-  the Tier-2 adapter registry, Tier-3 Playwright render, the Transform router,
-  gateway OAuth, the Streamable HTTP MCP server, and both `StorePort` impls are
+- The guarded fetch egress primitive, Tier-1 requester seam, extraction, and both
+  `StorePort` impls exist. The Tier-2 adapter registry, Tier-3 Playwright render,
+  the Transform router, gateway OAuth, and the Streamable HTTP MCP server are
   still pending. `docs/contracts.md` describes the whole product; nothing is
   version-gated or deferred, it all gets built.
