@@ -20,7 +20,35 @@ export interface HttpAppDeps {
   allowedOrigins: string[];
 }
 
+/**
+ * Thrown when the HTTP MCP listener is asked to run under a non-hosted flavor.
+ * The HTTP `/mcp` surface is the *hosted* (OAuth-authenticated) path; the
+ * local-binary flavor has no auth boundary and must never be network-exposed.
+ */
+export class HostedFlavorError extends Error {
+  readonly code = "hosted_flavor_required";
+}
+
+/**
+ * Fail loudly *before* any network listener is built if the HTTP/OAuth surface is
+ * pointed at the local-binary flavor. The HTTP `/mcp` listener authenticates
+ * every call via OAuth; the local-binary flavor is single-user with no auth, so
+ * serving it over a network listener would expose an unauthenticated `/mcp`.
+ * Local mode runs over the stdio bridge
+ * (`node --no-warnings src/interfaces/mcp/stdio-bridge.ts`) instead — never HTTP.
+ */
+export function assertHostedFlavor(runtime: AuthRuntimeConfig): void {
+  if (runtime.flavor !== "hosted") {
+    throw new HostedFlavorError(
+      "HTTP MCP listener runs only under the hosted flavor; refusing to expose " +
+        "the local-binary flavor (no OAuth boundary) on a network listener. " +
+        "Run local mode over stdio with `node --no-warnings src/interfaces/mcp/stdio-bridge.ts`.",
+    );
+  }
+}
+
 export async function createHttpApp(deps: HttpAppDeps): Promise<FastifyInstance> {
+  assertHostedFlavor(deps.runtime);
   const app = Fastify({ logger: false, bodyLimit: config.http.bodyLimitBytes });
   app.setErrorHandler((error, _request, reply) => sendHttpError(reply, error));
   app.get("/healthz", async () => ({ status: "ok" }));

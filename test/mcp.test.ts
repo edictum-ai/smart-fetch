@@ -7,16 +7,38 @@ import type { ClockPort } from "../src/application/ports/clock.ts";
 import type { FetcherOptions, FetcherPort, FetcherResult, RejectResult } from "../src/application/ports/fetcher.ts";
 import type { StorePort } from "../src/application/ports/store.ts";
 import type { TransformInput, TransformPort, TransformResult } from "../src/application/ports/transformer.ts";
-import type { HostedOAuthConfig } from "../src/application/use-cases/oauth-config.ts";
+import type { AuthRuntimeConfig, HostedOAuthConfig } from "../src/application/use-cases/oauth-config.ts";
 import { signAccessToken } from "../src/application/use-cases/oauth-crypto.ts";
 import { createSmartFetchUseCase } from "../src/application/use-cases/smart-fetch.ts";
 import { config } from "../src/config.ts";
 import { extractHtml } from "../src/infrastructure/extract/index.ts";
-import { createHttpApp } from "../src/interfaces/http/app.ts";
+import { assertHostedFlavor, createHttpApp, HostedFlavorError } from "../src/interfaces/http/app.ts";
 
 const NOW_MS = Date.parse("2026-06-16T12:00:00.000Z");
 const HOST = "smart-fetch.test";
 const ORIGIN = "https://client.test";
+
+test("HTTP MCP listener refuses local-binary instead of exposing an unauthenticated /mcp", async () => {
+  assert.throws(
+    () => assertHostedFlavor({ flavor: "local-binary" } as AuthRuntimeConfig),
+    (error: unknown) => error instanceof HostedFlavorError && error.code === "hosted_flavor_required",
+  );
+  await assert.rejects(
+    createHttpApp({
+      smartFetch: createSmartFetchUseCase({
+        fetcher: new FakeFetcher("<main>Body</main>"),
+        extractHtml,
+        clock: new FakeClock(NOW_MS),
+      }),
+      runtime: { flavor: "local-binary" } as AuthRuntimeConfig,
+      clock: new FakeClock(NOW_MS),
+      audit: new MemoryAudit(),
+      allowedHosts: [HOST],
+      allowedOrigins: [ORIGIN],
+    }),
+    (error: unknown) => error instanceof HostedFlavorError,
+  );
+});
 
 test("POST /mcp rejects unauthenticated hosted calls before smart_fetch runs", async () => {
   const ctx = await setup();

@@ -2,9 +2,10 @@
 
 Status: v1 direction. The guarded egress primitive, Tier-1 extraction,
 adapter registry seam, gated Tier-3 render, OAuth state stores, hosted OAuth
-route/use-case slice, Transform router, and hosted Streamable HTTP MCP server
-are implemented. This document describes the approved shape. `docs/contracts.md` is the source of truth for tool I/O, ports,
-provenance, OAuth, and errors; this file does not duplicate it.
+route/use-case slice, Transform router, hosted Streamable HTTP MCP server, and
+the self-contained local stdio bridge are implemented. This document describes
+the approved shape. `docs/contracts.md` is the source of truth for tool I/O,
+ports, provenance, OAuth, and errors; this file does not duplicate it.
 
 ## Shape
 
@@ -122,6 +123,53 @@ transform override requires `fetch:transform`. Tool results mirror the shared
 `Result` as MCP `structuredContent` and include a model-visible provenance line
 in the text content. Tool calls write metadata-only audit events.
 
+## Self-contained local binary
+
+The local-binary flavor is the **same engine** with a stdio transport instead of
+HTTP — no second implementation. `src/interfaces/mcp/local-server.ts`
+(`createLocalMcpServer`) builds the exact MCP server the hosted `POST /mcp` route
+serves (`createSmartFetchMcpServer` → the same `smart_fetch` tool schema and the
+same P3 `SmartFetchUseCase`), but with single-user local auth resolved through
+the existing `RequestAuthorizer` (`flavor: "local-binary"` returns the local
+subject with both scopes; no OAuth secrets, no token verification). It imports no
+hosted-only auth code into the core use case.
+
+`src/interfaces/mcp/stdio-bridge.ts` is the runnable entrypoint: it composes the
+real infrastructure (guarded `wreq` fetcher, extractor, model-router transformer,
+Playwright renderer), attaches an `StdioServerTransport`, and serves the local
+server. Invariants:
+
+- **No network listener.** The bridge opens no port and imports no HTTP server.
+  `assertLocalFlavor` makes it **fail loudly** if pointed at the `hosted` flavor,
+  so the unauthenticated local path can never become network-exposed. The guard is
+  symmetric on the HTTP side: `assertHostedFlavor` (in `src/interfaces/http/app.ts`,
+  called by both `createHttpApp` and the `src/server.ts` listener entrypoint)
+  **refuses to build or listen** under the `local-binary` flavor, so the network
+  `/mcp` listener can never serve the no-auth local flavor (defaults included).
+- **stdout is the JSON-RPC channel.** All audit/log output goes to **stderr**.
+  The advertised client command is the bare node invocation
+  `node --no-warnings src/interfaces/mcp/stdio-bridge.ts`, **not** `pnpm run bridge`:
+  pnpm writes a lifecycle banner (`> smart-fetch@… bridge`) to stdout and would
+  corrupt the protocol stream. If a package script is required, silence pnpm with
+  `corepack pnpm --silent run bridge`. `src/dev/smoke-stdio-process.ts` launches the
+  advertised node command and fails if any stdout line is not valid JSON-RPC.
+- **SSRF still applies.** Every fetch routes through the same `guardedFetch`
+  primitive; guarded-fetch rejections produce the same contract-shaped
+  `FETCH_REJECTED` result as hosted mode. "Local" is not permission to skip SSRF.
+
+Run under Node with `node --no-warnings src/interfaces/mcp/stdio-bridge.ts` — the
+stdio-safe command MCP clients should spawn (a bare process whose stdout carries
+only JSON-RPC). Do not use `pnpm run bridge` as the client command, since pnpm's
+lifecycle banner contaminates stdout; use `corepack pnpm --silent run bridge` if a
+package script is unavoidable. Build the single-file binary with
+`pnpm run build:binary`, which uses Bun's `--compile` (an **external tool**, not
+an npm dependency). When Bun is unavailable the script exits non-zero with the
+exact `bun build … --compile --outfile dist/smart-fetch` command to run on a
+machine that has Bun, and it never claims success unless `dist/smart-fetch` was
+actually produced. Packaging caveats: `wreq-js` ships native prebuilts and
+Playwright is a lazy `import('playwright')`, so the compiled binary still relies
+on those runtime assets being resolvable on the host (see `docs/dependency-ledger.md`).
+
 ## OAuth flow (hosted flavor only)
 
 Applies only to the hosted flavor; the local-binary flavor has no auth. Mirrors
@@ -178,3 +226,7 @@ Split by layer or responsibility when a file gets close to the limit.
   slice. The hosted Streamable HTTP MCP runtime exists locally and in tests.
   `docs/contracts.md` describes the whole product; nothing is version-gated or
   deferred.
+- Local-binary stdio behavior is complete and exercised by `pnpm run smoke` and
+  `pnpm test`. The single-file binary build (`pnpm run build:binary`) depends on
+  the external Bun toolchain; on a machine without Bun it exits with the exact
+  command to run elsewhere rather than producing a fake artifact.
