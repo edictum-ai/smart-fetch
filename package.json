@@ -18,7 +18,7 @@
     "server": "node --no-warnings src/server.ts",
     "bridge": "node --no-warnings src/interfaces/mcp/stdio-bridge.ts",
     "build:binary": "bash scripts/build-binary.sh",
-    "smoke": "pnpm run smoke:hosted && pnpm run smoke:local",
+    "smoke": "node --no-warnings src/dev/smoke-test.ts && node --no-warnings src/dev/smoke-stdio.ts && node --no-warnings src/dev/smoke-stdio-process.ts",
     "smoke:stdio": "node --no-warnings src/dev/smoke-stdio.ts",
     "smoke:stdio:process": "node --no-warnings src/dev/smoke-stdio-process.ts",
     "test": "node --test test/*.test.ts",
