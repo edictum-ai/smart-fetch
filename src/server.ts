@@ -23,7 +23,8 @@ const audit: AuditLoggerPort = {
 const runtime = loadAuthRuntimeConfig();
 // This entrypoint opens a network listener. It is hosted-only: refuse to start
 // it under the local-binary flavor (which has no OAuth boundary). Local mode is
-// served over stdio (`pnpm run bridge`) and never opens a port.
+// served over stdio (`node --no-warnings src/interfaces/mcp/stdio-bridge.ts`)
+// and never opens a port.
 assertHostedFlavor(runtime);
 const host = config.http.host();
 const port = config.http.port();

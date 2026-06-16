@@ -16,7 +16,8 @@
 #     startup with "Failed to load native module". Until wreq-js native assets can
 #     be embedded/shipped alongside the binary, the self-check below fails on
 #     purpose and no broken artifact is left behind. The stdio bridge still runs
-#     under the pinned Node 24 toolchain via `pnpm run bridge`.
+#     under the pinned Node 24 toolchain via the stdio-safe command
+#     `node --no-warnings src/interfaces/mcp/stdio-bridge.ts`.
 set -uo pipefail
 
 ENTRY="src/interfaces/mcp/stdio-bridge.ts"
@@ -28,8 +29,9 @@ EXTERNALS=(--external playwright --external playwright-core --external chromium-
 if ! command -v bun >/dev/null 2>&1; then
   cat >&2 <<EOF
 error: \`bun\` is required to compile the self-contained local binary, but it is
-not installed on this machine. The stdio bridge still runs under Node via
-\`pnpm run bridge\`; only the single-file binary needs Bun.
+not installed on this machine. The stdio bridge still runs under Node via the
+stdio-safe command \`node --no-warnings ${ENTRY}\`; only the single-file binary
+needs Bun.
 
 Install Bun (https://bun.sh) and run, where Bun is available:
 

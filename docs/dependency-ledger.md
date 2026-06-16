@@ -38,7 +38,10 @@ The self-contained local binary is produced by `pnpm run build:binary`
 developer tool, not an npm dependency** — no package was added to `package.json`
 or the lockfile for packaging, so the 15-day `minimumReleaseAge` gate is not
 engaged by this work. The stdio bridge itself runs under the pinned Node 24
-toolchain via `pnpm run bridge`; Bun is required only to emit the single-file
+toolchain via `node --no-warnings src/interfaces/mcp/stdio-bridge.ts` (the
+stdio-safe command; `pnpm run bridge` emits a pnpm banner on stdout and must not
+be the client command — use `corepack pnpm --silent run bridge` if a package
+script is required); Bun is required only to emit the single-file
 artifact. When Bun is absent, the build script exits non-zero with the exact
 command to run on a Bun-equipped machine and produces no artifact. If a future
 change needs an npm package for packaging, it must be added here and clear the

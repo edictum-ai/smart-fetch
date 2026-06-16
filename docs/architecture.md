@@ -147,11 +147,21 @@ server. Invariants:
   **refuses to build or listen** under the `local-binary` flavor, so the network
   `/mcp` listener can never serve the no-auth local flavor (defaults included).
 - **stdout is the JSON-RPC channel.** All audit/log output goes to **stderr**.
+  The advertised client command is the bare node invocation
+  `node --no-warnings src/interfaces/mcp/stdio-bridge.ts`, **not** `pnpm run bridge`:
+  pnpm writes a lifecycle banner (`> smart-fetch@… bridge`) to stdout and would
+  corrupt the protocol stream. If a package script is required, silence pnpm with
+  `corepack pnpm --silent run bridge`. `src/dev/smoke-stdio-process.ts` launches the
+  advertised node command and fails if any stdout line is not valid JSON-RPC.
 - **SSRF still applies.** Every fetch routes through the same `guardedFetch`
   primitive; guarded-fetch rejections produce the same contract-shaped
   `FETCH_REJECTED` result as hosted mode. "Local" is not permission to skip SSRF.
 
-Run under Node with `pnpm run bridge`. Build the single-file binary with
+Run under Node with `node --no-warnings src/interfaces/mcp/stdio-bridge.ts` — the
+stdio-safe command MCP clients should spawn (a bare process whose stdout carries
+only JSON-RPC). Do not use `pnpm run bridge` as the client command, since pnpm's
+lifecycle banner contaminates stdout; use `corepack pnpm --silent run bridge` if a
+package script is unavoidable. Build the single-file binary with
 `pnpm run build:binary`, which uses Bun's `--compile` (an **external tool**, not
 an npm dependency). When Bun is unavailable the script exits non-zero with the
 exact `bun build … --compile --outfile dist/smart-fetch` command to run on a

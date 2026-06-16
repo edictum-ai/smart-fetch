@@ -34,14 +34,15 @@ export class HostedFlavorError extends Error {
  * pointed at the local-binary flavor. The HTTP `/mcp` listener authenticates
  * every call via OAuth; the local-binary flavor is single-user with no auth, so
  * serving it over a network listener would expose an unauthenticated `/mcp`.
- * Local mode runs over the stdio bridge (`pnpm run bridge`) instead — never HTTP.
+ * Local mode runs over the stdio bridge
+ * (`node --no-warnings src/interfaces/mcp/stdio-bridge.ts`) instead — never HTTP.
  */
 export function assertHostedFlavor(runtime: AuthRuntimeConfig): void {
   if (runtime.flavor !== "hosted") {
     throw new HostedFlavorError(
       "HTTP MCP listener runs only under the hosted flavor; refusing to expose " +
         "the local-binary flavor (no OAuth boundary) on a network listener. " +
-        "Run local mode over stdio with `pnpm run bridge`.",
+        "Run local mode over stdio with `node --no-warnings src/interfaces/mcp/stdio-bridge.ts`.",
     );
   }
 }
