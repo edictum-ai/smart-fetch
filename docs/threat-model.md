@@ -30,7 +30,8 @@ the contract reference; this file is the security reasoning.
 - Per-request scope enforcement: `fetch:read` default, `fetch:transform` to use
   the Transform stage.
 - Rebinding-proof outbound `guardedFetch` (the single egress primitive):
-  - scheme `http|https` only; reject raw CRLF; strip userinfo.
+  - scheme `http|https` only; reject raw CRLF; reject userinfo-bearing URLs and
+    keep sanitized URL values credential-free.
   - resolve → exhaustive `isPrivate` CIDR: v4 `10/8`, `172.16/12`, `192.168/16`,
     `127/8`, `169.254/16` (incl. cloud-metadata `169.254.169.254`), `0.0.0.0/8`,
     `100.64/10`, `224/4`; v6 `::1`, `fe80/10`, `fc00/7`, `ff00/8`, IPv4-mapped
