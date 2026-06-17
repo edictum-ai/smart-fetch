@@ -55,7 +55,7 @@ export class PlaywrightRenderer implements RenderPort {
       await installPageControls(page, actions, input.timeoutMs);
       await page.route("**/*", (route) => state.handle(route));
       const response = await withTimeout(
-        page.goto(input.url, { waitUntil: "networkidle", timeout: input.timeoutMs }),
+        page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeoutMs }),
         input.timeoutMs,
       );
       if (state.fatal) return renderFailure(state.fatal, actions);

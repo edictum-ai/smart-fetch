@@ -33,7 +33,7 @@ const store = await storeFor(runtime);
 const smartFetch = createSmartFetchUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
-  transformer: createDefaultLlmTransformer(),
+  transformer: await createDefaultLlmTransformer(),
   renderer: new PlaywrightRenderer(),
   clock,
 });

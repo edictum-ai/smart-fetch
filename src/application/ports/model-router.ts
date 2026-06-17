@@ -13,6 +13,8 @@ export interface ModelPickOptions {
   provider?: Exclude<RouterProvider, "none">;
   model?: string;
   localOnly?: boolean;
+  /** Models already tried in this transform — excluded so the router returns the next candidate. */
+  exclude?: string[];
 }
 
 export interface ModelPick {

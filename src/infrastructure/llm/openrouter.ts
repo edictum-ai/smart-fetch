@@ -2,7 +2,8 @@ import { postJson } from "./http-json.ts";
 import type { LlmGenerateInput, LlmGenerateResult, LlmModelCandidate, LlmProvider } from "./types.ts";
 
 const DEFAULT_CONTEXT_TOKENS = 128_000;
-const DEFAULT_MODELS = ["google/gemini-2.0-flash-exp:free", "openrouter/auto"];
+const DEFAULT_MODELS = ["meta-llama/llama-3.3-70b-instruct:free", "openrouter/auto"];
+const DISCOVER_TIMEOUT_MS = 8_000;
 
 export interface OpenRouterProviderOptions {
   apiKey: string;
@@ -17,6 +18,8 @@ export class OpenRouterProvider implements LlmProvider {
   private readonly baseUrl: string;
   private readonly models: string[];
   private readonly timeoutMs: number;
+  /** Free models discovered live from GET /models (churn-safe); undefined until discovered. */
+  private discovered: string[] | undefined;
 
   constructor(options: OpenRouterProviderOptions) {
     this.apiKey = options.apiKey.trim();
@@ -25,9 +28,43 @@ export class OpenRouterProvider implements LlmProvider {
     this.timeoutMs = options.timeoutMs ?? 20_000;
   }
 
+  /**
+   * Discover currently-free text models from OpenRouter /models. OpenRouter's free
+   * pool churns constantly (models added, retired, rate-limited), so the candidate
+   * set is fetched live rather than hardcoded — a static list goes stale within days.
+   * Cached for the process; falls back to the static `models` list on any error or
+   * when no key is configured. `openrouter/auto` is appended as a paid last resort.
+   */
+  async discover(): Promise<void> {
+    if (this.discovered !== undefined) return;
+    if (!this.apiKey) {
+      this.discovered = this.models;
+      return;
+    }
+    try {
+      const response = await fetch(`${this.baseUrl}/models`, {
+        headers: { authorization: `Bearer ${this.apiKey}` },
+        signal: AbortSignal.timeout(DISCOVER_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        this.discovered = this.models;
+        return;
+      }
+      const payload = (await response.json()) as { data?: OpenRouterModel[] };
+      const free = (payload.data ?? [])
+        .filter(isFreeTextModel)
+        .map((model) => model.id)
+        .filter(Boolean);
+      this.discovered = free.length > 0 ? [...new Set([...free, "openrouter/auto"])] : this.models;
+    } catch {
+      this.discovered = this.models;
+    }
+  }
+
   candidates(): LlmModelCandidate[] {
     if (!this.apiKey) return [];
-    return this.models.map((model) => ({
+    const models = this.discovered ?? this.models;
+    return models.map((model) => ({
       provider: this.id,
       model,
       free: model.endsWith(":free"),
@@ -59,6 +96,13 @@ export class OpenRouterProvider implements LlmProvider {
   }
 }
 
+interface OpenRouterModel {
+  id: string;
+  pricing?: { prompt?: string; completion?: string };
+  architecture?: { input_modality?: string };
+  context_length?: number;
+}
+
 interface OpenRouterResponse {
   choices?: Array<{ message?: { content?: string } }>;
   usage?: {
@@ -66,6 +110,12 @@ interface OpenRouterResponse {
     completion_tokens?: number;
     cost?: number | string;
   };
+}
+
+function isFreeTextModel(model: OpenRouterModel): boolean {
+  if (model.pricing?.prompt !== "0") return false;
+  const modality = model.architecture?.input_modality ?? "text";
+  return modality.includes("text");
 }
 
 function numeric(value: unknown): number | undefined {

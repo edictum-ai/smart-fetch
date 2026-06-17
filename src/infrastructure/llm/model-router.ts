@@ -72,48 +72,67 @@ export class LlmTransformer implements TransformPort {
     if (override === "unsupported") return rawFallback(input.content, "unsupported_provider");
 
     const sensitive = detectSensitiveTransformInput(input);
-    const pick = this.router.pick(input.mode, inTokens, {
+    const baseOptions: ModelPickOptions = {
       provider: sensitive.sensitive ? undefined : override,
       model: typeof input.transform?.model === "string" ? input.transform.model : undefined,
       localOnly: sensitive.sensitive,
-    });
-    if (pick.provider === "none" || !pick.model) return rawFallback(input.content, pick.reason ?? "unconfigured");
-
-    const provider = this.providers[pick.provider];
-    if (!provider) return rawFallback(input.content, "provider_unavailable");
-
-    const started = this.nowMs();
-    let generated: LlmGenerateResult;
-    try {
-      generated = await provider.generate({
-        task: input.mode,
-        model: pick.model,
-        prompt: input.prompt,
-        content: input.content,
-        schema: input.schema,
-        budget: input.budget,
-        messages,
-        maxOutputTokens: normalizeBudget(input.budget),
-      });
-    } catch (error) {
-      this.router.feedback({ model: pick.model, score: 0, valid: false });
-      throw new TransformError("transform_provider_failed", errorMessage(error, "Provider transform failed"));
-    }
-
-    const latencyMs = elapsed(started, this.nowMs());
-    const finalized = finalize(input, generated.text, pick.model, this.router, latencyMs, generated.outTokens);
-    return {
-      result: finalized.result,
-      info: {
-        provider: pick.provider,
-        model: pick.model,
-        free: pick.free,
-        inTokens: generated.inTokens ?? inTokens,
-        outTokens: finalized.outTokens,
-        latencyMs,
-        costUsd: generated.costUsd,
-      },
     };
+
+    // Try candidate models in router-ranked order; on a provider error (dead model,
+    // 429 rate-limit, timeout) demote via the bandit and try the next free model.
+    // Only degrade after every candidate is exhausted.
+    const tried: string[] = [];
+    let lastError: Error | undefined;
+    while (true) {
+      const pick = this.router.pick(input.mode, inTokens, { ...baseOptions, exclude: tried });
+      if (pick.provider === "none" || !pick.model) {
+        if (tried.length === 0) return rawFallback(input.content, pick.reason ?? "unconfigured");
+        throw new TransformError(
+          "transform_provider_failed",
+          errorMessage(lastError, `All ${tried.length} candidate model(s) failed`),
+        );
+      }
+      const provider = this.providers[pick.provider];
+      if (!provider) {
+        tried.push(pick.model);
+        continue;
+      }
+
+      const started = this.nowMs();
+      let generated: LlmGenerateResult;
+      try {
+        generated = await provider.generate({
+          task: input.mode,
+          model: pick.model,
+          prompt: input.prompt,
+          content: input.content,
+          schema: input.schema,
+          budget: input.budget,
+          messages,
+          maxOutputTokens: normalizeBudget(input.budget),
+        });
+      } catch (error) {
+        this.router.feedback({ model: pick.model, score: 0, valid: false });
+        tried.push(pick.model);
+        lastError = error instanceof Error ? error : new Error(String(error));
+        continue;
+      }
+
+      const latencyMs = elapsed(started, this.nowMs());
+      const finalized = finalize(input, generated.text, pick.model, this.router, latencyMs, generated.outTokens);
+      return {
+        result: finalized.result,
+        info: {
+          provider: pick.provider,
+          model: pick.model,
+          free: pick.free,
+          inTokens: generated.inTokens ?? inTokens,
+          outTokens: finalized.outTokens,
+          latencyMs,
+          costUsd: generated.costUsd,
+        },
+      };
+    }
   }
 
   private nowMs(): number {
@@ -121,7 +140,7 @@ export class LlmTransformer implements TransformPort {
   }
 }
 
-export function createDefaultLlmTransformer(): LlmTransformer {
+export async function createDefaultLlmTransformer(): Promise<LlmTransformer> {
   const openRouter = new OpenRouterProvider({
     apiKey: config.transform.openRouterApiKey(),
     baseUrl: config.transform.openRouterBaseUrl(),
@@ -133,6 +152,8 @@ export function createDefaultLlmTransformer(): LlmTransformer {
     model: config.transform.ollamaModel(),
     timeoutMs: config.transform.timeoutMs(),
   });
+  // Discover OpenRouter's currently-free models live (the pool churns constantly).
+  await openRouter.discover();
   const providers = { openrouter: openRouter, ollama };
   return new LlmTransformer({ router: new ModelRouter([...openRouter.candidates(), ...ollama.candidates()]), providers });
 }
@@ -175,6 +196,7 @@ function finalizeExtract(text: string, schema: unknown, model: string, router: M
 function fits(candidate: LlmModelCandidate, task: RouterTask, inputTokens: number, options: ModelPickOptions): boolean {
   if (options.provider && candidate.provider !== options.provider) return false;
   if (options.model && candidate.model !== options.model) return false;
+  if (options.exclude && options.exclude.includes(candidate.model)) return false;
   if (options.localOnly && !candidate.local) return false;
   if (task === "extract" && !candidate.supportsJson) return false;
   return candidate.contextTokens >= inputTokens + RESERVED_OUTPUT_TOKENS;

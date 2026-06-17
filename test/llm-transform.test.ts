@@ -277,7 +277,7 @@ test("sensitive content prefers local Ollama and skips hosted provider", async (
   const result = await transformer.transform({
     mode: "summarize",
     output: "summary",
-    content: "Authorization: Bearer secret\nPublic body",
+    content: "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig\nPublic body",
     prompt: "Summarize",
   });
 

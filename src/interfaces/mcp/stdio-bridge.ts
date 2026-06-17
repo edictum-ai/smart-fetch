@@ -33,11 +33,11 @@ function logStderr(record: Record<string, unknown>): void {
   process.stderr.write(`${JSON.stringify(record)}\n`);
 }
 
-function buildLocalDeps(): LocalMcpDeps {
+async function buildLocalDeps(): Promise<LocalMcpDeps> {
   return {
     fetcher: createWreqGuardedFetcher(),
     extractHtml,
-    transformer: createDefaultLlmTransformer(),
+    transformer: await createDefaultLlmTransformer(),
     renderer: new PlaywrightRenderer(),
     clock,
     audit,
@@ -45,7 +45,7 @@ function buildLocalDeps(): LocalMcpDeps {
 }
 
 async function startStdioBridge(): Promise<Server> {
-  const server = await createLocalMcpServer(buildLocalDeps());
+  const server = await createLocalMcpServer(await buildLocalDeps());
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
