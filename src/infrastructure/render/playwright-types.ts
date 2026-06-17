@@ -39,6 +39,7 @@ export interface PlaywrightRoute {
     headers?: Record<string, string>;
   }): Promise<void>;
   abort(errorCode?: string): Promise<void>;
+  continue(): Promise<void>;
 }
 
 export interface PlaywrightRequest {

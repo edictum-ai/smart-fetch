@@ -19,7 +19,7 @@ test("renderer launches sandboxed context with service workers and downloads dis
     downloadUrl: "https://public.test/file.zip",
     websocketUrl: "wss://public.test/socket",
   });
-  const result = await new PlaywrightRenderer({ loadPlaywright: harness.load })
+  const result = await new PlaywrightRenderer({ loadPlaywright: harness.load, guard: new FakeGuard({}) })
     .render(renderInput(new FakeFetcher()));
 
   assert.equal(result.rendered, true);
@@ -38,9 +38,10 @@ test("renderer launches sandboxed context with service workers and downloads dis
   ]);
 });
 
-test("renderer routes private subresources through guarded fetch and blocks them", async () => {
+test("renderer continues the public navigation and blocks private subresources", async () => {
+  const navUrl = "https://public.test/";
   const privateUrl = "http://169.254.169.254/latest.js";
-  const fetcher = new FakeFetcher({
+  const guard = new FakeGuard({
     [privateUrl]: {
       rejected: true,
       code: "private_address",
@@ -48,20 +49,14 @@ test("renderer routes private subresources through guarded fetch and blocks them
     },
   });
   const harness = new BrowserHarness({
-    requests: [
-      request("https://public.test/", "document", true),
-      request(privateUrl, "script"),
-    ],
+    requests: [request(navUrl, "document", true), request(privateUrl, "script")],
   });
 
-  const result = await new PlaywrightRenderer({ loadPlaywright: harness.load })
-    .render(renderInput(fetcher));
+  const result = await new PlaywrightRenderer({ loadPlaywright: harness.load, guard })
+    .render(renderInput(new FakeFetcher()));
 
   assert.equal(result.rendered, true);
-  assert.deepEqual(fetcher.calls.map((call) => call.url), [
-    "https://public.test/",
-    privateUrl,
-  ]);
+  assert.equal(harness.routes[0]?.continued, true);
   assert.equal(harness.routes.at(-1)?.aborted, true);
   assert.deepEqual(result.actions.at(-1), {
     type: "request-blocked",
@@ -76,7 +71,6 @@ test("renderer checks private image URLs before aborting blocked body types", as
   const guard = new FakeGuard({
     [imageUrl]: { rejected: true, code: "private_address", message: "blocked" },
   });
-  const fetcher = new FakeFetcher();
   const harness = new BrowserHarness({
     requests: [
       request("https://public.test/", "document", true),
@@ -85,11 +79,10 @@ test("renderer checks private image URLs before aborting blocked body types", as
   });
 
   const result = await new PlaywrightRenderer({ loadPlaywright: harness.load, guard })
-    .render(renderInput(fetcher));
+    .render(renderInput(new FakeFetcher()));
 
   assert.equal(result.rendered, true);
-  assert.deepEqual(guard.calls, [imageUrl]);
-  assert.deepEqual(fetcher.calls.map((call) => call.url), ["https://public.test/"]);
+  assert.ok(guard.calls.includes(imageUrl));
   assert.equal(harness.routes.at(-1)?.aborted, true);
   assert.deepEqual(result.actions.at(-1), {
     type: "resource-aborted",
@@ -101,7 +94,7 @@ test("renderer checks private image URLs before aborting blocked body types", as
 
 test("renderer enforces rendered HTML byte cap", async () => {
   const harness = new BrowserHarness({ content: "<main>too large</main>" });
-  const result = await new PlaywrightRenderer({ loadPlaywright: harness.load })
+  const result = await new PlaywrightRenderer({ loadPlaywright: harness.load, guard: new FakeGuard({}) })
     .render(renderInput(new FakeFetcher(), { maxBytes: 8 }));
 
   assert.equal(result.rendered, false);
@@ -216,6 +209,7 @@ class BrowserHarness {
 
 class FakeRoute {
   aborted = false;
+  continued = false;
   status = 0;
   readonly scripted: ScriptedRequest;
 
@@ -238,6 +232,10 @@ class FakeRoute {
 
   async abort(): Promise<void> {
     this.aborted = true;
+  }
+
+  async continue(): Promise<void> {
+    this.continued = true;
   }
 }
 
@@ -295,7 +293,7 @@ class FakeGuard implements BrowserUrlGuard {
   readonly calls: string[] = [];
   private readonly results: Record<string, RejectResult>;
 
-  constructor(results: Record<string, RejectResult>) {
+  constructor(results: Record<string, RejectResult> = {}) {
     this.results = results;
   }
 

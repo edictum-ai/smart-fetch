@@ -1,8 +1,4 @@
-import type {
-  FetcherOptions,
-  FetcherResult,
-  RejectResult,
-} from "../../application/ports/fetcher.ts";
+import type { FetcherResult, RejectResult } from "../../application/ports/fetcher.ts";
 import type { RenderAction, RenderInput } from "../../application/ports/renderer.ts";
 import type { PlaywrightRoute } from "./playwright-types.ts";
 import { safeRenderUrl, type BrowserUrlGuard } from "./browser-url-guard.ts";
@@ -16,6 +12,14 @@ const ANALYTICS_HOSTS = [
   "segment.io",
 ];
 
+/**
+ * Per-request route state for the Tier-3 render. The browser fetches resources
+ * natively; this handler only enforces egress policy: abort analytics/blocked
+ * body types, abort non-GET, and abort any request whose host resolves to a
+ * private/reserved address (SSRF). Everything else continues. Re-fetching and
+ * re-fulfilling every subresource through the guarded fetcher was the earlier
+ * design — it gave no extra SSRF value over this IP check and hung page.goto.
+ */
 export class RenderRouteState {
   readonly input: RenderInput;
   readonly actions: RenderAction[];
@@ -23,7 +27,6 @@ export class RenderRouteState {
   status = 200;
   finalUrl = "";
   redirects: FetcherResult["redirects"] = [];
-  fetchedBytes = 0;
   fatal?: RejectResult;
 
   constructor(input: RenderInput, actions: RenderAction[], guard: BrowserUrlGuard) {
@@ -44,13 +47,13 @@ export class RenderRouteState {
       await this.abort(route, url, resourceType, "unsupported_browser_method");
       return;
     }
-    const fetched = await this.fetch(url);
-    if ("rejected" in fetched) {
-      if (isNavigation(request)) this.fatal = fetched;
-      await this.abort(route, url, resourceType, fetched.code);
+    const blocked = await this.guard.check(url, AbortSignal.timeout(this.input.timeoutMs));
+    if (blocked) {
+      if (isNavigation(request)) this.fatal = blocked;
+      await this.abort(route, url, resourceType, blocked.code, "request-blocked");
       return;
     }
-    await this.fulfill(route, fetched, isNavigation(request));
+    await route.continue();
   }
 
   private async abortAfterGuard(
@@ -61,41 +64,6 @@ export class RenderRouteState {
     const blocked = await this.guard.check(url, AbortSignal.timeout(this.input.timeoutMs));
     const reason = blocked?.code ?? `blocked_${resourceType}`;
     await this.abort(route, url, resourceType, reason, "resource-aborted");
-  }
-
-  private async fetch(url: string): Promise<FetcherResult | RejectResult> {
-    const remaining = this.input.maxBytes - this.fetchedBytes;
-    if (remaining <= 0) return maxBytesReject();
-    return await this.input.fetcher.fetchGuarded(url, {
-      maxBytes: remaining,
-      timeoutMs: this.input.timeoutMs,
-      maxHops: this.input.maxHops,
-    } satisfies FetcherOptions);
-  }
-
-  private async fulfill(
-    route: PlaywrightRoute,
-    fetched: FetcherResult,
-    mainNavigation: boolean,
-  ): Promise<void> {
-    this.fetchedBytes += fetched.bytes;
-    if (this.fetchedBytes > this.input.maxBytes) {
-      this.fatal = maxBytesReject();
-      await route.abort("blockedbyclient");
-      return;
-    }
-    if (mainNavigation) {
-      this.status = fetched.status;
-      this.finalUrl = fetched.finalUrl;
-      this.redirects = fetched.redirects;
-    }
-    const body = new Uint8Array(await new Response(fetched.bodyStream).arrayBuffer());
-    await route.fulfill({
-      status: fetched.status,
-      body,
-      contentType: fetched.contentType || undefined,
-      headers: fetched.contentType ? { "content-type": fetched.contentType } : undefined,
-    });
   }
 
   private async abort(
