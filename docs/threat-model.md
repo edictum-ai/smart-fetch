@@ -18,8 +18,9 @@ the contract reference; this file is the security reasoning.
 - Browser and agent clients are outside the gateway trust boundary.
 - The gateway is the security boundary for scopes and tools.
 - TiDB is reachable only from the smart-fetch task security group, on `4000/tcp`.
-  No new database server — it reuses `personal-memory-infra`'s TiDB at
-  `REDACTED_TIDB_HOST:4000`.
+  The hosted flavor reuses an existing MySQL-compatible (TiDB) instance
+  provisioned in the private infrastructure — no new database server. The
+  specific host/account live in the private infra repo, not this public repo.
 - The **local-binary flavor has no network trust boundary** — it is single-user /
   single-agent only and runs without auth. It must never be exposed on a network.
   Its entrypoint is the stdio bridge (`src/interfaces/mcp/stdio-bridge.ts`), which
