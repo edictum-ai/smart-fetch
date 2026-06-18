@@ -55,6 +55,7 @@ function compactResult(result: Result): Record<string, unknown> {
     output: result.output,
     finalUrl: result.finalUrl,
     title: result.title,
+    result: result.result,
     bytes: result.bytes,
     code: result.code,
     jsRequired: result.jsRequired,
