@@ -43,6 +43,7 @@
     ],
     "contentType": "text/html; charset=utf-8",
     "title": "SPA Fixture",
+    "contentSha256": "fe7fcff420aef079ceb8ce250346f36bab9d81f27e13502f715540b4fd720335",
     "structured": {
       "meta": {
         "viewport": "width=device-width, initial-scale=1"
@@ -52,7 +53,8 @@
       "totalMs": 0,
       "fetchMs": 0
     },
-    "errors": []
+    "errors": [],
+    "provenanceHash": "e9ed79e76630e5c60aa9ea77cb742b65a997fcce96dc2bfe85b1fa51f4d7fefe"
   },
   "mcpText": "<!-- captatum tier=render-blocked output=raw status=200 bytes=244 finalUrl=https://fixture.test/spa platform=generic jsRequired=true resolvedVia=render-blocked -->\n"
 }

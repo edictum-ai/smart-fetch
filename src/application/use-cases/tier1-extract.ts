@@ -1,7 +1,7 @@
 import { STATUS_CODES } from "node:http";
 import type { FetcherResult } from "../ports/fetcher.ts";
 import type { Output } from "../../domain/tier.ts";
-import type { ProvenanceError, Result } from "../../domain/result.ts";
+import { sha256Hex, type ProvenanceError, type Result } from "../../domain/result.ts";
 import type { StructuredData } from "../../domain/platform.ts";
 import type { ShellGateEvidence } from "../../domain/shell-gate.ts";
 
@@ -70,6 +70,7 @@ export async function extractTier1FromFetchResult(input: Tier1ExtractInput): Pro
     }],
     contentType: input.fetchResult.contentType,
     title,
+    contentSha256: sha256Hex(html),
     structured,
     timings: { totalMs: input.durationMs, fetchMs: input.fetchMs ?? input.durationMs },
     errors: extraction.errors,

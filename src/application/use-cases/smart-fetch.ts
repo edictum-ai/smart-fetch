@@ -4,7 +4,7 @@ import type { ClockPort } from "../ports/clock.ts";
 import type { RenderPort } from "../ports/renderer.ts";
 import { TransformError, type TransformPort, type TransformResult } from "../ports/transformer.ts";
 import type { Platform } from "../../domain/platform.ts";
-import type { Result } from "../../domain/result.ts";
+import { computeProvenanceHash, type Result } from "../../domain/result.ts";
 import {
   extractTier1FromFetchResult,
   type HtmlExtractor,
@@ -198,6 +198,7 @@ function stampTotals(result: Result, totalMs: number, fetchMs: number): void {
   result.timings.totalMs = totalMs;
   result.timings.fetchMs = fetchMs;
   result.codeText = result.code === 0 ? result.codeText : STATUS_CODES[result.code] ?? "";
+  result.provenanceHash = computeProvenanceHash(result);
 }
 
 function unexpectedReject(error: unknown): RejectResult {

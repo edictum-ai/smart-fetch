@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Tier, Output } from "./tier.ts";
 import type { Platform, StructuredData } from "./platform.ts";
 
@@ -73,4 +74,35 @@ export interface Result {
   errors: ProvenanceError[];
   /** Caller-injected ISO timestamp; no Date.now() in core. */
   fetchedAt?: string;
+  /** sha256 over the canonical fetched/rendered bytes — content-addressable evidence (cache key, blob id, Edictum artifact id). */
+  contentSha256?: string;
+  /** sha256 over the stable JSON of the provenance envelope — attests how the result was produced. */
+  provenanceHash?: string;
+}
+
+/** sha256 hex of a string. */
+export function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Stable hash over the provenance envelope (fixed key order, null for absent
+ * optional fields) so a Result can be cited/attested downstream. Excludes the
+ * mutable text body — contentSha256 covers that separately.
+ */
+export function computeProvenanceHash(result: Result): string {
+  const envelope = {
+    url: result.url,
+    finalUrl: result.finalUrl,
+    tier: result.tier,
+    code: result.code,
+    output: result.output,
+    resolvedVia: result.resolvedVia,
+    jsRequired: result.jsRequired,
+    contentSha256: result.contentSha256 ?? null,
+    fetchedAt: result.fetchedAt ?? null,
+    transformProvider: result.transform?.provider ?? null,
+    transformModel: result.transform?.model ?? null,
+  };
+  return sha256Hex(JSON.stringify(envelope));
 }

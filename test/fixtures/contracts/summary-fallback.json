@@ -35,6 +35,7 @@
     ],
     "contentType": "text/html; charset=utf-8",
     "title": "Contract Fixture",
+    "contentSha256": "1358e82ff768545063d9701b5e1563af59c56868b4bd66de270d12887bc1bb3c",
     "structured": {
       "canonicalUrl": "https://fixture.test/contract",
       "og": {
@@ -50,6 +51,7 @@
       "transformMs": 0
     },
     "errors": [],
+    "provenanceHash": "20491d8d7e9f4797f3351a47fba1f5ef90fe6559244f1cce47e3891ebd22f44a",
     "transform": {
       "provider": "none",
       "reason": "unconfigured"
