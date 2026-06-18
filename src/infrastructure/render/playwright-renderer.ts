@@ -58,6 +58,7 @@ export class PlaywrightRenderer implements RenderPort {
         page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeoutMs }),
         input.timeoutMs,
       );
+      await page.waitForTimeout(3000);
       if (state.fatal) return renderFailure(state.fatal, actions);
       const content = await page.content();
       const bytes = new TextEncoder().encode(content);

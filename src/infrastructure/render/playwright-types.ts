@@ -23,6 +23,7 @@ export interface PlaywrightPage {
   goto(url: string, options: Record<string, unknown>): Promise<PlaywrightResponse | null>;
   content(): Promise<string>;
   url(): string;
+  waitForTimeout(ms: number): Promise<void>;
   close(): Promise<void>;
 }
 
