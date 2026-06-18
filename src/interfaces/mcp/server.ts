@@ -48,6 +48,33 @@ export function createSmartFetchMcpServer(deps: SmartFetchMcpServerDeps): Server
   return server;
 }
 
+function compactResult(result: Result): Record<string, unknown> {
+  const compact: Record<string, unknown> = {
+    schemaVersion: result.schemaVersion,
+    tier: result.tier,
+    output: result.output,
+    finalUrl: result.finalUrl,
+    title: result.title,
+    bytes: result.bytes,
+    code: result.code,
+    jsRequired: result.jsRequired,
+    resolvedVia: result.resolvedVia,
+    errors: result.errors,
+  };
+  if (result.structured?.jsonLd) {
+    const items = Array.isArray(result.structured.jsonLd) ? result.structured.jsonLd : [result.structured.jsonLd];
+    const stripped = items.map((item) => {
+      if (item && typeof item === "object" && "description" in item) {
+        const { description: _, ...rest } = item as Record<string, unknown>;
+        return rest;
+      }
+      return item;
+    });
+    compact.structured = { jsonLd: stripped.length === 1 ? stripped[0] : stripped };
+  }
+  return compact;
+}
+
 async function callSmartFetch(args: unknown, deps: SmartFetchMcpServerDeps): Promise<CallToolResult> {
   const started = deps.clock.nowMs();
   try {
@@ -57,7 +84,7 @@ async function callSmartFetch(args: unknown, deps: SmartFetchMcpServerDeps): Pro
     await auditResult(deps, result);
     return {
       content: [{ type: "text", text: resultToMcpText(result) }],
-      structuredContent: result as unknown as Record<string, unknown>,
+      structuredContent: compactResult(result),
     };
   } catch (error) {
     await auditFailure(deps, args, started, error);
