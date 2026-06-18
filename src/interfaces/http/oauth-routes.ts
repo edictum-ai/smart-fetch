@@ -206,7 +206,10 @@ function setConsentCookie(reply: FastifyReply, token: string, ttlSeconds: number
 function assertAllowedRedirect(value: string, allowlist: string[]): void {
   const url = new URL(value);
   url.hash = "";
-  if (!allowlist.includes(url.href)) throw new OAuthError("invalid_redirect_uri", "redirect_uri is not allowed");
+  const href = url.href;
+  if (!allowlist.some((e) => (e.endsWith("*") ? href.startsWith(e.slice(0, -1)) : e === href))) {
+    throw new OAuthError("invalid_redirect_uri", "redirect_uri is not allowed");
+  }
 }
 
 function hostOf(value: string): string | undefined {
