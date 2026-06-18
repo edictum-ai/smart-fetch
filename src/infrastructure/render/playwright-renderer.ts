@@ -60,7 +60,15 @@ export class PlaywrightRenderer implements RenderPort {
       );
       await page.waitForTimeout(3000);
       if (state.fatal) return renderFailure(state.fatal, actions);
-      const content = await page.content();
+      let content = await page.content();
+      try {
+        const main = page.mainFrame();
+        for (const frame of page.frames()) {
+          if (frame === main) continue;
+          const frameContent = await frame.content();
+          if (frameContent.length > 100) content += "\n" + frameContent;
+        }
+      } catch { /* iframe capture best-effort */ }
       const bytes = new TextEncoder().encode(content);
       if (bytes.byteLength > input.maxBytes) {
         return renderFailure(maxBytesReject(), actions);

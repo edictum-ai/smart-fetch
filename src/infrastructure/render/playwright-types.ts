@@ -14,6 +14,10 @@ export interface PlaywrightContext {
   close(): Promise<void>;
 }
 
+export interface PlaywrightFrame {
+  content(): Promise<string>;
+}
+
 export interface PlaywrightPage {
   route(pattern: string, handler: RouteHandler): Promise<void>;
   routeWebSocket?(pattern: string, handler: WebSocketHandler): Promise<void>;
@@ -22,6 +26,8 @@ export interface PlaywrightPage {
   setDefaultNavigationTimeout?(timeoutMs: number): void;
   goto(url: string, options: Record<string, unknown>): Promise<PlaywrightResponse | null>;
   content(): Promise<string>;
+  frames(): PlaywrightFrame[];
+  mainFrame(): PlaywrightFrame;
   url(): string;
   waitForTimeout(ms: number): Promise<void>;
   close(): Promise<void>;
