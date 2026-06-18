@@ -11,13 +11,13 @@
 import { createSmartFetchUseCase } from "../application/use-cases/smart-fetch.ts";
 import { extractHtml } from "../infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "../infrastructure/wreq/requester.ts";
-import { PlaywrightRenderer } from "../infrastructure/render/index.ts";
+import { createRenderer } from "../infrastructure/render/index.ts";
 
 const clock = { nowMs: () => Date.now() };
 const smartFetch = createSmartFetchUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
-  renderer: new PlaywrightRenderer(),
+  renderer: createRenderer(),
   clock,
 });
 
@@ -124,3 +124,4 @@ for (const c of cases) {
 
 console.log(`\n${pass}/${pass + fail} cases passed`);
 if (fail > 0) process.exit(1);
+process.exit(0); // the cached CDP sidecar connection keeps the loop alive; dev tool exits explicitly

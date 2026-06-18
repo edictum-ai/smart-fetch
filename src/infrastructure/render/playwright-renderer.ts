@@ -11,6 +11,7 @@ import { streamFromBytes } from "../http/body.ts";
 import { P1BrowserUrlGuard, safeRenderUrl, type BrowserUrlGuard } from "./browser-url-guard.ts";
 import { RenderRouteState } from "./route-state.ts";
 import type {
+  PlaywrightBrowser,
   PlaywrightDownload,
   PlaywrightContext,
   PlaywrightEventValue,
@@ -23,31 +24,54 @@ import type {
 export interface PlaywrightRendererDeps {
   loadPlaywright?: () => Promise<PlaywrightModule>;
   guard?: BrowserUrlGuard;
+  /** CDP endpoint for sidecar mode (e.g. "http://localhost:9222"). If set, the renderer connects to a long-lived Chromium in its own container instead of launching one in-process. */
+  cdpEndpoint?: string;
+  /** Chromium OS sandbox for in-process launch. Default true — the threat model mandates sandbox on; --no-sandbox in-process is only for a sidecar-less transitional deploy. */
+  chromiumSandbox?: boolean;
+  /** Cap (ms) for the post-load network-idle settle that replaces the old flat 3s sleep. Default 3000. */
+  settleMs?: number;
 }
 
 export class PlaywrightRenderer implements RenderPort {
   private readonly loadPlaywright: () => Promise<PlaywrightModule>;
   private readonly guard: BrowserUrlGuard;
+  private readonly cdpEndpoint?: string;
+  private readonly chromiumSandbox: boolean;
+  private readonly settleMs: number;
+  /** Lazily-connected, reused CDP browser. Connecting per-render would leak a WebSocket every call. */
+  private cdpBrowser?: PlaywrightBrowser;
 
   constructor(deps: PlaywrightRendererDeps = {}) {
     this.loadPlaywright = deps.loadPlaywright ?? defaultLoadPlaywright;
     this.guard = deps.guard ?? new P1BrowserUrlGuard();
+    this.cdpEndpoint = deps.cdpEndpoint;
+    this.chromiumSandbox = deps.chromiumSandbox ?? true;
+    this.settleMs = deps.settleMs ?? 3000;
   }
 
   async render(input: RenderInput): Promise<RenderOutput> {
     const actions: RenderAction[] = [serviceWorkerAction()];
     const state = new RenderRouteState(input, actions, this.guard);
-    let browser: Awaited<ReturnType<PlaywrightModule["chromium"]["launch"]>> | undefined;
+    let browser: PlaywrightBrowser | undefined;
     let context: PlaywrightContext | undefined;
     let page: PlaywrightPage | undefined;
+    let ownsBrowser = false;
 
     try {
       const playwright = await this.loadPlaywright();
-      browser = await playwright.chromium.launch({
-        headless: true,
-        chromiumSandbox: false,
-        env: {},
-      });
+      if (this.cdpEndpoint) {
+        // Sidecar mode: connect ONCE to a long-lived Chromium in its own container
+        // (blast-radius separation), reuse across renders; never close it here.
+        if (!this.cdpBrowser) this.cdpBrowser = await playwright.chromium.connectOverCDP(this.cdpEndpoint);
+        browser = this.cdpBrowser;
+      } else {
+        browser = await playwright.chromium.launch({
+          headless: true,
+          chromiumSandbox: this.chromiumSandbox,
+          env: {},
+        });
+        ownsBrowser = true;
+      }
       context = await browser.newContext({
         serviceWorkers: "block",
         acceptDownloads: false,
@@ -59,7 +83,9 @@ export class PlaywrightRenderer implements RenderPort {
         page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeoutMs }),
         input.timeoutMs,
       );
-      await page.waitForTimeout(3000);
+      // Idle-aware settle (replaces a flat 3s sleep): wait for network quiescence,
+      // capped at settleMs; never fail if a page holds a long-lived connection.
+      await page.waitForLoadState("networkidle", { timeout: this.settleMs }).catch(() => {});
       if (state.fatal) return renderFailure(state.fatal, actions);
       let content = await page.content();
       try {
@@ -85,7 +111,8 @@ export class PlaywrightRenderer implements RenderPort {
     } finally {
       await closeQuietly(page);
       await closeQuietly(context);
-      await closeQuietly(browser);
+      // Only close a browser we launched; the CDP sidecar is shared + long-lived.
+      if (ownsBrowser) await closeQuietly(browser);
     }
   }
 }

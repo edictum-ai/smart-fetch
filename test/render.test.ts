@@ -24,7 +24,7 @@ test("renderer launches sandboxed context with service workers and downloads dis
 
   assert.equal(result.rendered, true);
   assert.deepEqual(harness.launchOptions.env, {});
-  assert.equal(harness.launchOptions.chromiumSandbox, false);
+  assert.equal(harness.launchOptions.chromiumSandbox, true);
   assert.deepEqual(harness.contextOptions, {
     serviceWorkers: "block",
     acceptDownloads: false,
@@ -148,6 +148,23 @@ test("renderer returns timeout and closes the browser on stalled navigation", as
   assert.equal(harness.browserClosed, true);
 });
 
+test("renderer connects to a CDP sidecar and does not close the shared browser", async () => {
+  const harness = new BrowserHarness();
+  const renderer = new PlaywrightRenderer({
+    loadPlaywright: harness.load,
+    guard: new FakeGuard({}),
+    cdpEndpoint: "http://localhost:9222",
+  });
+  const result = await renderer.render(renderInput(new FakeFetcher()));
+
+  // Sidecar mode: connect over CDP (not launch), and never close the long-lived
+  // shared browser — only the per-render context+page.
+  assert.equal(result.rendered, true);
+  assert.equal(harness.cdpEndpoint, "http://localhost:9222");
+  assert.equal(harness.launchCalled, false);
+  assert.equal(harness.browserClosed, false);
+});
+
 interface ScriptedRequest {
   url: string;
   resourceType: string;
@@ -157,7 +174,9 @@ interface ScriptedRequest {
 
 class BrowserHarness {
   loadCalls = 0;
+  launchCalled = false;
   launchOptions: Record<string, unknown> = {};
+  cdpEndpoint?: string;
   contextOptions: Record<string, unknown> = {};
   routes: FakeRoute[] = [];
   browserClosed = false;
@@ -184,7 +203,12 @@ class BrowserHarness {
     return {
       chromium: {
         launch: async (options: Record<string, unknown>) => {
+          this.launchCalled = true;
           this.launchOptions = options;
+          return this.browser();
+        },
+        connectOverCDP: async (endpoint: string) => {
+          this.cdpEndpoint = endpoint;
           return this.browser();
         },
       },
@@ -229,6 +253,7 @@ class BrowserHarness {
       // The real renderer waits for client-side widgets after DOMContentLoaded
       // (commit 9bba8aa) and captures iframe content (commit d50a3c9).
       waitForTimeout: async (_ms: number) => {},
+      waitForLoadState: async (_state: string, _options?: { timeout?: number }) => {},
       mainFrame: () => mainFrame,
       frames: () => (extraFrame ? [mainFrame, extraFrame] : [mainFrame]),
       content: async () => this.options.content ?? "<main>rendered</main>",

@@ -9,7 +9,7 @@
 import { createSmartFetchUseCase } from "../application/use-cases/smart-fetch.ts";
 import { extractHtml } from "../infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "../infrastructure/wreq/requester.ts";
-import { PlaywrightRenderer } from "../infrastructure/render/index.ts";
+import { createRenderer } from "../infrastructure/render/index.ts";
 
 const url = process.argv[2];
 const allowRender = process.argv.includes("--render");
@@ -23,7 +23,7 @@ const clock = { nowMs: () => Date.now() };
 const smartFetch = createSmartFetchUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
-  renderer: new PlaywrightRenderer(),
+  renderer: createRenderer(),
   clock,
 });
 
@@ -63,3 +63,5 @@ function jsonLdTypes(jsonLd: unknown): string[] {
   }
   return types;
 }
+
+process.exit(0); // the cached CDP sidecar connection keeps the loop alive; dev tool exits explicitly

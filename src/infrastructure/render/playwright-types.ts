@@ -1,6 +1,7 @@
 export interface PlaywrightModule {
   chromium: {
     launch(options: Record<string, unknown>): Promise<PlaywrightBrowser>;
+    connectOverCDP(endpoint: string): Promise<PlaywrightBrowser>;
   };
 }
 
@@ -30,6 +31,7 @@ export interface PlaywrightPage {
   mainFrame(): PlaywrightFrame;
   url(): string;
   waitForTimeout(ms: number): Promise<void>;
+  waitForLoadState(state: string, options?: { timeout?: number }): Promise<void>;
   close(): Promise<void>;
 }
 

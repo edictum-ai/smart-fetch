@@ -8,7 +8,7 @@ import type {
 import type { ClockPort } from "../../application/ports/clock.ts";
 import { extractHtml } from "../../infrastructure/extract/index.ts";
 import { createDefaultLlmTransformer } from "../../infrastructure/llm/model-router.ts";
-import { PlaywrightRenderer } from "../../infrastructure/render/index.ts";
+import { createRenderer } from "../../infrastructure/render/index.ts";
 import { createWreqGuardedFetcher } from "../../infrastructure/wreq/requester.ts";
 import { createLocalMcpServer, type LocalMcpDeps } from "./local-server.ts";
 
@@ -38,7 +38,7 @@ async function buildLocalDeps(): Promise<LocalMcpDeps> {
     fetcher: createWreqGuardedFetcher(),
     extractHtml,
     transformer: await createDefaultLlmTransformer(),
-    renderer: new PlaywrightRenderer(),
+    renderer: createRenderer(),
     clock,
     audit,
   };

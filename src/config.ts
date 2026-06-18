@@ -55,6 +55,10 @@ export const config = {
   render: {
     allowRenderDefault: false,
     timeoutMs: 20000,
+    /** CDP endpoint of a browser sidecar (e.g. "http://localhost:9222"). If set, Tier-3 connects to a Chromium in its own container instead of launching one in-process (blast-radius separation). */
+    cdpEndpoint: () => envString("CAPTATUM_BROWSER_CDP_ENDPOINT", ""),
+    /** Chromium sandbox for in-process launch (default true — threat model: never --no-sandbox). Only relevant when no sidecar is configured. */
+    chromiumSandbox: () => envString("CAPTATUM_BROWSER_INPROCESS_SANDBOX", "true") === "true",
   },
   tidb: {
     host: () => envString("TIDB_HOST", ""),
