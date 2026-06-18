@@ -4,6 +4,7 @@ FROM node:24.16.0-bookworm-slim@sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972
 ENV NODE_ENV=production
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 WORKDIR /app
 
