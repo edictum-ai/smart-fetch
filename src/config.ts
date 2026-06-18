@@ -17,6 +17,13 @@ export const config = {
   auth: {
     localHeaderMode: () => envString("LOCAL_HEADER_MODE", "false") === "true",
   },
+  cloudflareAccess: {
+    enabled: () => envString("CF_ACCESS_ENABLED", "false") === "true",
+    allowedEmail: () => envString("CF_ACCESS_ALLOWED_EMAIL", ""),
+    audience: () => envString("CF_ACCESS_AUDIENCE", ""),
+    certsUrl: () => envString("CF_ACCESS_CERTS_URL", ""),
+    issuer: () => envString("CF_ACCESS_ISSUER", ""),
+  },
   deployment: {
     flavor: () => envString("SMART_FETCH_FLAVOR", envString("DEPLOYMENT_FLAVOR", "local-binary")),
     production: () => envString("NODE_ENV", "development") === "production",
