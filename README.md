@@ -17,8 +17,9 @@ WebFetch (the Claude built-in) does a static GET + Turndown + Haiku — no JS, n
 anti-bot, drops iframe/JSON-LD, no record of how a result was produced. Captatum
 differs on the axes that matter for autonomous agents:
 
-- **Renders when needed** — anti-bot `wreq-js` Tier-1 fetch, lazy Playwright
-  Tier-3 render only for empty SPA shells, structured-data extraction.
+- **Renders when needed** — `wreq-js` Tier-1 fetch (TLS/JA3 anti-bot fingerprint
+  on HTTP; checked-IP fallback on HTTPS), lazy Playwright Tier-3 render only for
+  empty SPA shells, structured-data extraction.
 - **Provenance by default** — every response carries how it was produced, so a
   downstream gate can decide trust and a human can audit what an agent pulled.
 - **MCP-native** — reachable as a named tool from Claude.ai and ChatGPT today.
