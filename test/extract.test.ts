@@ -45,7 +45,8 @@ test("extracts Open Graph, Twitter, generic meta, and canonical from og-meta.htm
     "twitter:card": "summary_large_image",
     "twitter:title": "Twitter Fixture Title",
   });
-  assert.equal(extraction.shellGate.reason, "structured-data-found");
+  // OG/twitter meta alone (empty body, no JSON-LD/app-state) is a shell — render it.
+  assert.equal(extraction.shellGate.reason, "empty-spa-shell");
 });
 
 test("ignores unsafe meta keys after normalization", () => {
@@ -62,7 +63,7 @@ test("ignores unsafe meta keys after normalization", () => {
 
   assert.deepEqual(extraction.structured.og, { "og:title": "Safe OG" });
   assert.deepEqual(extraction.structured.meta, { description: "Safe meta" });
-  assert.equal(extraction.shellGate.reason, "structured-data-found");
+  assert.equal(extraction.shellGate.reason, "empty-spa-shell");
 });
 
 test("extracts __NEXT_DATA__ and __INITIAL_STATE__ from app-state.html", () => {
@@ -106,6 +107,29 @@ test("shell gate distinguishes content-page.html from spa-shell.html", () => {
   assert.equal(shell.shellGate.appRootFound, true);
   assert.equal(shell.shellGate.scriptCount, 2);
   assert.equal(shell.text, "");
+});
+
+test("shell gate escalates an OG-tagged SPA with an empty body (regression: vue-realworld, react-shopping-cart)", () => {
+  // Real failure: an SPA ships og:title + an app-root div + a JS bundle but no
+  // body text. OG is social-card metadata, not content — this must render.
+  const extraction = extractHtml({
+    html: [
+      "<html><head>",
+      "<title>Conduit</title>",
+      "<meta property=\"og:title\" content=\"Conduit\">",
+      "<meta property=\"og:type\" content=\"website\">",
+      "</head><body>",
+      "<div id=\"app\"></div>",
+      "<script src=\"/bundle.js\"></script>",
+      "</body></html>",
+    ].join(""),
+    url: "https://example.test/spa-with-og",
+  });
+
+  assert.equal(extraction.shellGate.jsRequired, true);
+  assert.equal(extraction.shellGate.reason, "empty-spa-shell");
+  assert.equal(extraction.shellGate.appRootFound, true);
+  assert.ok(extraction.structured.og, "OG still extracted");
 });
 
 test("prototype-pollution.html drops unsafe app-state keys without mutating prototypes", () => {

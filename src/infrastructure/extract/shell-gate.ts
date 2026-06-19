@@ -3,7 +3,6 @@ import type { StructuredData } from "../../domain/platform.ts";
 import { findStartTags } from "./html.ts";
 
 const APP_ROOT_IDS = new Set(["__next", "app", "gatsby-focus-wrapper", "root", "svelte"]);
-const LOW_VALUE_META = new Set(["charset", "generator", "theme-color", "viewport"]);
 
 export function evaluateShellGate(input: {
   html: string;
@@ -30,11 +29,15 @@ export function evaluateShellGate(input: {
   return { ...evidence, jsRequired: true, reason: "empty-spa-shell" };
 }
 
+/**
+ * Whether the structured data carries content an agent can use WITHOUT rendering.
+ * Only JSON-LD and embedded app state count — OG / twitter meta is social-card
+ * metadata, NOT body content. An SPA can ship og:title with an empty <body>, which
+ * is still a shell that needs rendering (regression: vue-realworld, react-shopping-cart
+ * returned tier 1 with zero content because OG bypassed the shell-gate).
+ */
 export function hasUsableStructuredData(structured: StructuredData): boolean {
-  if (structured.jsonLd !== undefined || structured.appState !== undefined) return true;
-  if (structured.og && Object.keys(structured.og).length > 0) return true;
-  if (!structured.meta) return false;
-  return Object.keys(structured.meta).some((key) => !LOW_VALUE_META.has(key));
+  return structured.jsonLd !== undefined || structured.appState !== undefined;
 }
 
 function hasContent(html: string, textLength: number, wordCount: number): boolean {
