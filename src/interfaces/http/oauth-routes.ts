@@ -8,6 +8,8 @@ import { OAuthAuthorizationUseCase, type AuthorizeRequestInput } from "../../app
 import { OAuthTokenUseCase } from "../../application/use-cases/oauth-token.ts";
 import { OAuthError, oauthErrorBody } from "../../application/use-cases/oauth-errors.ts";
 import { OAUTH_SCOPES } from "../../application/use-cases/oauth-scopes.ts";
+import { config } from "../../config.ts";
+import { createCloudflareAccessJwtVerifier } from "../../infrastructure/auth/cloudflare-access-jwt.ts";
 
 export interface OAuthRoutesDeps {
   config: HostedOAuthConfig;
@@ -17,6 +19,32 @@ export interface OAuthRoutesDeps {
 }
 
 const CONSENT_COOKIE = "smart_fetch_consent";
+
+// Cloudflare Access JWT verifier (created once when configured). When enabled,
+// the /oauth/authorize subject is the verified Access email, not a placeholder.
+const cfAccess = config.cloudflareAccess;
+const cfAccessVerifier = cfAccess.enabled() && cfAccess.certsUrl()
+  ? createCloudflareAccessJwtVerifier({
+    allowedEmail: cfAccess.allowedEmail(),
+    audience: cfAccess.audience(),
+    certsUrl: cfAccess.certsUrl(),
+    issuer: cfAccess.issuer(),
+  })
+  : undefined;
+
+async function resolveSubject(headers: FastifyRequest["headers"]): Promise<string> {
+  if (!cfAccessVerifier) return "hosted-user"; // CF Access not configured (local/dev/single-user)
+  const token = headerString(headers, "cf-access-jwt-assertion");
+  if (!token) throw new OAuthError("access_denied", "Cloudflare Access JWT is required", 401);
+  const verified = await cfAccessVerifier(token);
+  if (!verified.ok) throw new OAuthError("access_denied", `Cloudflare Access JWT rejected: ${verified.reason}`, 401);
+  return verified.claims.email;
+}
+
+function headerString(headers: FastifyRequest["headers"], name: string): string | undefined {
+  const value = headers[name];
+  return typeof value === "string" ? value : Array.isArray(value) ? value[0] : undefined;
+}
 
 export async function registerOAuthRoutes(app: FastifyInstance, deps: OAuthRoutesDeps): Promise<void> {
   addFormParser(app);
@@ -33,7 +61,7 @@ export async function registerOAuthRoutes(app: FastifyInstance, deps: OAuthRoute
   app.post("/oauth/register", async (request, reply) => registerClient(request, reply, deps));
   app.get("/oauth/authorize", async (request, reply) => {
     try {
-      const prepared = await authorization.prepare(queryParams(request));
+      const prepared = await authorization.prepare({ ...queryParams(request), subject: await resolveSubject(request.headers) });
       setConsentCookie(reply, prepared.consentToken, deps.config.consentTokenTtlSeconds);
       const esc = (v: string) => v.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" })[c]!);
       const scopeList = prepared.scopes.map((s) => `<div class="scope">${esc(s)}</div>`).join("");

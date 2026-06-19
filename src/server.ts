@@ -6,7 +6,7 @@ import { config } from "./config.ts";
 import { extractHtml } from "./infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "./infrastructure/wreq/requester.ts";
 import { createDefaultLlmTransformer } from "./infrastructure/llm/model-router.ts";
-import { PlaywrightRenderer } from "./infrastructure/render/index.ts";
+import { createRenderer } from "./infrastructure/render/index.ts";
 import { createTidbStore } from "./infrastructure/tidb/index.ts";
 import type { StorePort } from "./application/ports/store.ts";
 import { assertHostedFlavor, createHttpApp } from "./interfaces/http/app.ts";
@@ -34,7 +34,7 @@ const smartFetch = createSmartFetchUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
   transformer: await createDefaultLlmTransformer(),
-  renderer: new PlaywrightRenderer(),
+  renderer: createRenderer(),
   clock,
 });
 const app = await createHttpApp({
@@ -47,7 +47,7 @@ const app = await createHttpApp({
 });
 
 await app.listen({ host, port });
-console.log(`smart-fetch server listening on http://${host}:${port}`);
+console.log(`captatum server listening on http://${host}:${port}`);
 
 process.once("SIGINT", () => void shutdown());
 process.once("SIGTERM", () => void shutdown());

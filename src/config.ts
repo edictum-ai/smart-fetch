@@ -17,6 +17,13 @@ export const config = {
   auth: {
     localHeaderMode: () => envString("LOCAL_HEADER_MODE", "false") === "true",
   },
+  cloudflareAccess: {
+    enabled: () => envString("CF_ACCESS_ENABLED", "false") === "true",
+    allowedEmail: () => envString("CF_ACCESS_ALLOWED_EMAIL", ""),
+    audience: () => envString("CF_ACCESS_AUDIENCE", ""),
+    certsUrl: () => envString("CF_ACCESS_CERTS_URL", ""),
+    issuer: () => envString("CF_ACCESS_ISSUER", ""),
+  },
   deployment: {
     flavor: () => envString("SMART_FETCH_FLAVOR", envString("DEPLOYMENT_FLAVOR", "local-binary")),
     production: () => envString("NODE_ENV", "development") === "production",
@@ -48,6 +55,10 @@ export const config = {
   render: {
     allowRenderDefault: false,
     timeoutMs: 20000,
+    /** CDP endpoint of a browser sidecar (e.g. "http://localhost:9222"). If set, Tier-3 connects to a Chromium in its own container instead of launching one in-process (blast-radius separation). */
+    cdpEndpoint: () => envString("CAPTATUM_BROWSER_CDP_ENDPOINT", ""),
+    /** Chromium sandbox for in-process launch (default true — threat model: never --no-sandbox). Only relevant when no sidecar is configured. */
+    chromiumSandbox: () => envString("CAPTATUM_BROWSER_INPROCESS_SANDBOX", "true") === "true",
   },
   tidb: {
     host: () => envString("TIDB_HOST", ""),

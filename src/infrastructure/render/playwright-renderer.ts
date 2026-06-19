@@ -1,4 +1,5 @@
 import type { RejectResult } from "../../application/ports/fetcher.ts";
+import type { ProvenanceError } from "../../domain/result.ts";
 import type {
   RenderAction,
   RenderFailure,
@@ -8,8 +9,9 @@ import type {
 } from "../../application/ports/renderer.ts";
 import { streamFromBytes } from "../http/body.ts";
 import { P1BrowserUrlGuard, safeRenderUrl, type BrowserUrlGuard } from "./browser-url-guard.ts";
-import { maxBytesReject, RenderRouteState } from "./route-state.ts";
+import { RenderRouteState } from "./route-state.ts";
 import type {
+  PlaywrightBrowser,
   PlaywrightDownload,
   PlaywrightContext,
   PlaywrightEventValue,
@@ -22,31 +24,54 @@ import type {
 export interface PlaywrightRendererDeps {
   loadPlaywright?: () => Promise<PlaywrightModule>;
   guard?: BrowserUrlGuard;
+  /** CDP endpoint for sidecar mode (e.g. "http://localhost:9222"). If set, the renderer connects to a long-lived Chromium in its own container instead of launching one in-process. */
+  cdpEndpoint?: string;
+  /** Chromium OS sandbox for in-process launch. Default true — the threat model mandates sandbox on; --no-sandbox in-process is only for a sidecar-less transitional deploy. */
+  chromiumSandbox?: boolean;
+  /** Cap (ms) for the post-load network-idle settle that replaces the old flat 3s sleep. Default 3000. */
+  settleMs?: number;
 }
 
 export class PlaywrightRenderer implements RenderPort {
   private readonly loadPlaywright: () => Promise<PlaywrightModule>;
   private readonly guard: BrowserUrlGuard;
+  private readonly cdpEndpoint?: string;
+  private readonly chromiumSandbox: boolean;
+  private readonly settleMs: number;
+  /** Lazily-connected, reused CDP browser. Connecting per-render would leak a WebSocket every call. */
+  private cdpBrowser?: PlaywrightBrowser;
 
   constructor(deps: PlaywrightRendererDeps = {}) {
     this.loadPlaywright = deps.loadPlaywright ?? defaultLoadPlaywright;
     this.guard = deps.guard ?? new P1BrowserUrlGuard();
+    this.cdpEndpoint = deps.cdpEndpoint;
+    this.chromiumSandbox = deps.chromiumSandbox ?? true;
+    this.settleMs = deps.settleMs ?? 3000;
   }
 
   async render(input: RenderInput): Promise<RenderOutput> {
     const actions: RenderAction[] = [serviceWorkerAction()];
     const state = new RenderRouteState(input, actions, this.guard);
-    let browser: Awaited<ReturnType<PlaywrightModule["chromium"]["launch"]>> | undefined;
+    let browser: PlaywrightBrowser | undefined;
     let context: PlaywrightContext | undefined;
     let page: PlaywrightPage | undefined;
+    let ownsBrowser = false;
 
     try {
       const playwright = await this.loadPlaywright();
-      browser = await playwright.chromium.launch({
-        headless: true,
-        chromiumSandbox: false,
-        env: {},
-      });
+      if (this.cdpEndpoint) {
+        // Sidecar mode: connect ONCE to a long-lived Chromium in its own container
+        // (blast-radius separation), reuse across renders; never close it here.
+        if (!this.cdpBrowser) this.cdpBrowser = await playwright.chromium.connectOverCDP(this.cdpEndpoint);
+        browser = this.cdpBrowser;
+      } else {
+        browser = await playwright.chromium.launch({
+          headless: true,
+          chromiumSandbox: this.chromiumSandbox,
+          env: {},
+        });
+        ownsBrowser = true;
+      }
       context = await browser.newContext({
         serviceWorkers: "block",
         acceptDownloads: false,
@@ -58,7 +83,9 @@ export class PlaywrightRenderer implements RenderPort {
         page.goto(input.url, { waitUntil: "domcontentloaded", timeout: input.timeoutMs }),
         input.timeoutMs,
       );
-      await page.waitForTimeout(3000);
+      // Idle-aware settle (replaces a flat 3s sleep): wait for network quiescence,
+      // capped at settleMs; never fail if a page holds a long-lived connection.
+      await page.waitForLoadState("networkidle", { timeout: this.settleMs }).catch(() => {});
       if (state.fatal) return renderFailure(state.fatal, actions);
       let content = await page.content();
       try {
@@ -69,17 +96,23 @@ export class PlaywrightRenderer implements RenderPort {
           if (frameContent.length > 100) content += "\n" + frameContent;
         }
       } catch { /* iframe capture best-effort */ }
-      const bytes = new TextEncoder().encode(content);
-      if (bytes.byteLength > input.maxBytes) {
-        return renderFailure(maxBytesReject(), actions);
-      }
-      return renderSuccess(input, page, response?.status() ?? state.status, bytes, state);
+      // Advisory byte cap: the rendered HTML is already in memory, so truncate
+      // at the cap and keep rendering (with a provenance note) rather than
+      // throwing the whole render away. Matches the advisory philosophy used
+      // when render itself fails. The fetch-path cap stays a hard reject (it is
+      // a pre-download bandwidth/abuse guard).
+      const { bytes, truncated } = capRenderedBytes(content, input.maxBytes);
+      const notice: ProvenanceError | undefined = truncated
+        ? { code: "max_bytes", message: `Rendered content truncated at ${input.maxBytes} bytes` }
+        : undefined;
+      return renderSuccess(input, page, response?.status() ?? state.status, bytes, state, notice);
     } catch (error) {
       return renderFailure(state.fatal ?? rejectFromError(error), actions);
     } finally {
       await closeQuietly(page);
       await closeQuietly(context);
-      await closeQuietly(browser);
+      // Only close a browser we launched; the CDP sidecar is shared + long-lived.
+      if (ownsBrowser) await closeQuietly(browser);
     }
   }
 }
@@ -126,6 +159,7 @@ function renderSuccess(
   status: number,
   bytes: Uint8Array,
   state: RenderRouteState,
+  notice?: ProvenanceError,
 ): RenderOutput {
   return {
     rendered: true,
@@ -138,7 +172,22 @@ function renderSuccess(
       bytes: bytes.byteLength,
     },
     actions: state.actions,
+    ...(notice ? { notice } : {}),
   };
+}
+
+/**
+ * UTF-8-safe truncation that never exceeds the cap. Encode once, then cut at the
+ * largest character boundary at or below maxBytes by walking back past any
+ * trailing continuation bytes (0x80–0xBF) — so the slice never splits a
+ * multibyte sequence and is always valid UTF-8.
+ */
+function capRenderedBytes(content: string, maxBytes: number): { bytes: Uint8Array; truncated: boolean } {
+  const full = new TextEncoder().encode(content);
+  if (full.byteLength <= maxBytes) return { bytes: full, truncated: false };
+  let cut = maxBytes;
+  while (cut > 0 && (full[cut] & 0xc0) === 0x80) cut -= 1;
+  return { bytes: full.subarray(0, cut), truncated: true };
 }
 
 function renderFailure(rejected: RejectResult, actions: RenderAction[]): RenderFailure {
@@ -171,7 +220,7 @@ function rejectFromError(error: unknown): RejectResult {
     return { rejected: true, code: "timeout", message: "Render timed out" };
   }
   const detail = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`smart-fetch render error: ${detail}\n`);
+  process.stderr.write(`captatum render error: ${detail}\n`);
   return { rejected: true, code: "render_error", message: `Tier-3 render failed: ${detail}` };
 }
 

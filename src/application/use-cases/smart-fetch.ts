@@ -4,7 +4,7 @@ import type { ClockPort } from "../ports/clock.ts";
 import type { RenderPort } from "../ports/renderer.ts";
 import { TransformError, type TransformPort, type TransformResult } from "../ports/transformer.ts";
 import type { Platform } from "../../domain/platform.ts";
-import type { Result } from "../../domain/result.ts";
+import { computeProvenanceHash, type Result } from "../../domain/result.ts";
 import {
   extractTier1FromFetchResult,
   type HtmlExtractor,
@@ -141,6 +141,12 @@ export class SmartFetchUseCase {
     base.result = transformed.result;
     base.output = transformed.info.provider === "none" ? "raw" : request.requestedOutput;
     base.transform = transformed.info;
+    // Non-fatal: extract returned parsed JSON that violated the requested schema.
+    // The data is kept (advisory), but the mismatch is surfaced so the caller
+    // is not silently handed schema-violating structured data.
+    if (transformed.info.schemaIssue) {
+      base.errors.push({ code: "extract_schema_invalid", message: transformed.info.schemaIssue });
+    }
     base.timings.transformMs = transformMs;
     stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
     return base;
@@ -192,6 +198,7 @@ function stampTotals(result: Result, totalMs: number, fetchMs: number): void {
   result.timings.totalMs = totalMs;
   result.timings.fetchMs = fetchMs;
   result.codeText = result.code === 0 ? result.codeText : STATUS_CODES[result.code] ?? "";
+  result.provenanceHash = computeProvenanceHash(result);
 }
 
 function unexpectedReject(error: unknown): RejectResult {

@@ -36,6 +36,7 @@
     ],
     "contentType": "text/html; charset=utf-8",
     "title": "Contract Fixture",
+    "contentSha256": "1358e82ff768545063d9701b5e1563af59c56868b4bd66de270d12887bc1bb3c",
     "structured": {
       "canonicalUrl": "https://fixture.test/contract",
       "og": {
@@ -49,7 +50,8 @@
       "totalMs": 0,
       "fetchMs": 0
     },
-    "errors": []
+    "errors": [],
+    "provenanceHash": "983844b9c040e871b23741a1d03b275b6c9be1173a1cfc5934be3005fffb4427"
   },
-  "mcpText": "<!-- smart-fetch tier=1 output=raw status=200 bytes=444 finalUrl=https://fixture.test/contract platform=generic jsRequired=false resolvedVia=tier1-meta -->\nContract Fixture Smart fetch fixture body for contract reconciliation."
+  "mcpText": "<!-- captatum tier=1 output=raw status=200 bytes=444 finalUrl=https://fixture.test/contract platform=generic jsRequired=false resolvedVia=tier1-meta -->\nContract Fixture Smart fetch fixture body for contract reconciliation."
 }

@@ -30,6 +30,8 @@ export interface AuthorizeRequestInput {
   resource?: string;
   scope?: string;
   state?: string;
+  /** Authenticated subject (verified Cloudflare Access email); falls back to SUBJECT. */
+  subject?: string;
 }
 
 export interface PreparedConsent extends ConsentRequestClaims {
@@ -82,7 +84,7 @@ export class OAuthAuthorizationUseCase {
       await this.store.saveAuthCode({
         codeHash: sha256Hex(code),
         clientId: consent.clientId,
-        subject: SUBJECT,
+        subject: consent.subject,
         redirectUri: consent.redirectUri,
         resource: consent.resource,
         scopes: consent.scopes,
@@ -90,7 +92,7 @@ export class OAuthAuthorizationUseCase {
         codeChallengeMethod: "S256",
         expiresAt: expiresAtIso(this.clock, this.config.authorizationCodeTtlSeconds),
       });
-      await this.auditAuth("oauth.authorize.approve", "success", consent, SUBJECT);
+      await this.auditAuth("oauth.authorize.approve", "success", consent, consent.subject);
       return { code, redirectTo: this.redirectWithCode(consent.redirectUri, code, consent.state), state: consent.state };
     } catch (error) {
       await this.auditFailure("oauth.authorize.approve", error);
@@ -111,7 +113,7 @@ export class OAuthAuthorizationUseCase {
     }
     const codeChallenge = required(input.codeChallenge, "code_challenge");
     const scopes = normalizeScopes(input.scope);
-    return { clientId, redirectUri, resource, scopes, codeChallenge, codeChallengeMethod: "S256", state: input.state };
+    return { clientId, redirectUri, resource, scopes, codeChallenge, codeChallengeMethod: "S256", state: input.state, subject: input.subject ?? SUBJECT };
   }
 
   private allowedRedirect(value: string): string {

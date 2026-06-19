@@ -19,6 +19,8 @@ export interface ConsentRequestClaims {
   codeChallenge: string;
   codeChallengeMethod: "S256";
   state?: string;
+  /** Authenticated subject (verified Cloudflare Access email on hosted; fallback otherwise). */
+  subject: string;
 }
 
 export interface AccessTokenClaims {
@@ -84,6 +86,7 @@ export async function signConsentToken(
   }).setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuer(config.issuer)
     .setAudience(CONSENT_AUDIENCE)
+    .setSubject(claims.subject)
     .setIssuedAt(now)
     .setExpirationTime(now + config.consentTokenTtlSeconds)
     .sign(consentSecret(config));
@@ -172,6 +175,7 @@ function consentClaims(payload: JWTPayload): ConsentRequestClaims {
     codeChallenge: requiredString(payload.code_challenge, "code_challenge"),
     codeChallengeMethod: "S256",
     state: stringClaim(payload.state),
+    subject: requiredString(payload.sub, "sub"),
   };
 }
 
