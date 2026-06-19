@@ -10,6 +10,7 @@ import {
   type HtmlExtractor,
 } from "./tier1-extract.ts";
 import { maybeRender } from "./render.ts";
+import { resolveAshbyEmbedUrl } from "../../infrastructure/ashby/embed-resolver.ts";
 import {
   DEFAULT_SMART_FETCH_DEFAULTS,
   normalizeSmartFetchInput,
@@ -57,9 +58,17 @@ export class SmartFetchUseCase {
     const request = normalizeSmartFetchInput(input, this.defaults);
     const startMs = this.clock.nowMs();
     const fetchStartMs = startMs;
+    // Tier-2: resolve Ashby-embed careers pages (e2b.dev/careers?ashby_jid=…)
+    // to the direct Ashby job URL, which serves a clean JobPosting JSON-LD at Tier-1.
+    const ashbyResolved = await resolveAshbyEmbedUrl(request.url, this.fetcher, {
+      maxBytes: request.maxBytes,
+      timeoutMs: request.timeoutMs,
+      maxHops: request.maxHops,
+    });
+    const fetchUrl = ashbyResolved ?? request.url;
     let fetched: FetcherResult | RejectResult;
     try {
-      fetched = await this.fetcher.fetchGuarded(request.url, {
+      fetched = await this.fetcher.fetchGuarded(fetchUrl, {
         maxBytes: request.maxBytes,
         timeoutMs: request.timeoutMs,
         maxHops: request.maxHops,
@@ -82,6 +91,9 @@ export class SmartFetchUseCase {
       output: "raw",
       fetchedAt: context.fetchedAt,
     });
+    if (ashbyResolved) {
+      base.platform = { adapterId: "ashby-embed", label: "Ashby embed", detectedFrom: "ashby_jid" };
+    }
     stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
     const resolved = await maybeRender({
       result: base,

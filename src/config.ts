@@ -45,7 +45,7 @@ export const config = {
     openRouterBaseUrl: () => envString("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     openRouterModels: () => envString(
       "OPENROUTER_MODELS",
-      "meta-llama/llama-3.3-70b-instruct:free,openrouter/auto",
+      "deepseek/deepseek-v4-flash,openrouter/auto",
     ),
     ollamaBaseUrl: () => envString("OLLAMA_BASE_URL", ""),
     ollamaModel: () => envString("OLLAMA_MODEL", "llama3.1"),

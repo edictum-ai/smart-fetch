@@ -2,6 +2,7 @@ import { STATUS_CODES } from "node:http";
 import type { FetcherResult } from "../ports/fetcher.ts";
 import type { Output } from "../../domain/tier.ts";
 import { sha256Hex, type ProvenanceError, type Result } from "../../domain/result.ts";
+import { decodeBody } from "../../infrastructure/http/body.ts";
 import type { StructuredData } from "../../domain/platform.ts";
 import type { ShellGateEvidence } from "../../domain/shell-gate.ts";
 
@@ -32,7 +33,7 @@ export interface Tier1ExtractInput {
 }
 
 export async function extractTier1FromFetchResult(input: Tier1ExtractInput): Promise<Result> {
-  const html = await new Response(input.fetchResult.bodyStream).text();
+  const html = await decodeBody(input.fetchResult.bodyStream, input.fetchResult.contentType);
   const extraction = input.extractHtml({
     html,
     url: input.fetchResult.finalUrl || input.requestedUrl,

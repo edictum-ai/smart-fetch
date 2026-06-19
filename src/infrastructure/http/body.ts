@@ -69,6 +69,35 @@ export function streamFromBytes(bytes: Uint8Array): ReadableStream<Uint8Array> {
   });
 }
 
+/**
+ * Decode a body stream to text, honoring the HTTP `Content-Type` charset.
+ * Previously hard-coded UTF-8 via `Response.text()`, which corrupted pages
+ * served as iso-8859-15 / windows-1252 / etc. (e.g. elmundo.es → "apag�n").
+ * Falls back to UTF-8 when the charset is absent or unsupported.
+ */
+export async function decodeBody(
+  stream: ReadableStream<Uint8Array>,
+  contentType?: string,
+): Promise<string> {
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
+  const charset = parseCharset(contentType);
+  if (charset && charset.toLowerCase() !== "utf-8" && charset.toLowerCase() !== "utf8") {
+    try {
+      return new TextDecoder(charset, { fatal: false }).decode(bytes);
+    } catch {
+      // Unknown charset label — fall through to UTF-8.
+    }
+  }
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
+function parseCharset(contentType?: string): string | undefined {
+  if (!contentType) return undefined;
+  const match = /charset\s*=\s*["']?([^\s;"']+)/i.exec(contentType);
+  return match?.[1];
+}
+
+
 function decodedStream(body: Readable, encodingHeader: string): Readable {
   const encoding = encodingHeader.toLowerCase().split(",")[0]?.trim() ?? "";
   if (!encoding || encoding === "identity") return body;
