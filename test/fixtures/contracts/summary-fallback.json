@@ -30,7 +30,7 @@
         "status": 200,
         "durationMs": 0,
         "bytes": 444,
-        "reason": "structured-data-found"
+        "reason": "content-present"
       }
     ],
     "contentType": "text/html; charset=utf-8",
