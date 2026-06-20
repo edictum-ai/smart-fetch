@@ -11,6 +11,7 @@ import {
 } from "./tier1-extract.ts";
 import { maybeRender } from "./render.ts";
 import { resolveAshbyEmbedUrl } from "../../infrastructure/ashby/embed-resolver.ts";
+import { transformContent } from "./transform-content.ts";
 import {
   DEFAULT_SMART_FETCH_DEFAULTS,
   normalizeSmartFetchInput,
@@ -133,7 +134,7 @@ export class SmartFetchUseCase {
       transformed = await this.transformer.transform({
         mode: request.requestedOutput === "extract" ? "extract" : "summarize",
         output: request.requestedOutput,
-        content: base.result + (base.structured?.jsonLd ? `\n\n--- Verified structured data (JSON-LD) — prefer these fields ---\n${JSON.stringify(base.structured.jsonLd, null, 2)}` : ""),
+        content: transformContent(base),
         prompt: request.prompt,
         sourceUrl: base.finalUrl,
         schema: request.schema,
