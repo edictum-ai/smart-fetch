@@ -11,6 +11,7 @@ import {
 } from "./tier1-extract.ts";
 import { maybeRender } from "./render.ts";
 import { resolveAshbyEmbedUrl } from "../../infrastructure/ashby/embed-resolver.ts";
+import { fallbackExcerpt } from "./result-excerpt.ts";
 import { transformContent } from "./transform-content.ts";
 import {
   DEFAULT_SMART_FETCH_DEFAULTS,
@@ -123,6 +124,7 @@ export class SmartFetchUseCase {
       base.output = "raw";
       base.transform = { provider: "none", reason: "unconfigured" };
       base.timings.transformMs = 0;
+      base.result = fallbackExcerpt(base.result);
       stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
       return base;
     }
@@ -148,12 +150,18 @@ export class SmartFetchUseCase {
       base.transform = { provider: "none", reason: "failed", latencyMs: transformMs };
       base.timings.transformMs = transformMs;
       base.errors.push({ code: transformErrorCode(error), message: errorMessage(error, "Transform failed") });
+      base.result = fallbackExcerpt(base.result);
       stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
       return base;
     }
     base.result = transformed.result;
     base.output = transformed.info.provider === "none" ? "raw" : request.requestedOutput;
     base.transform = transformed.info;
+    // The transform fell back to raw content (unconfigured / no model fit / rawFallback).
+    // Bound it so a failed summary does not dump the entire page into the agent context.
+    if (transformed.info.provider === "none") {
+      base.result = fallbackExcerpt(base.result);
+    }
     // Non-fatal: extract returned parsed JSON that violated the requested schema.
     // The data is kept (advisory), but the mismatch is surfaced so the caller
     // is not silently handed schema-violating structured data.

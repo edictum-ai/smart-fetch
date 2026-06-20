@@ -27,7 +27,7 @@ export function buildStructuredContent(result: Result, debug: boolean): Record<s
     title: result.title,
     output: result.output,
     contentType,
-    result: result.result,
+    result: snippet(result.result),
     tier: result.tier,
     code: result.code,
     codeText: result.codeText,
@@ -111,6 +111,21 @@ function prune(value: Record<string, unknown>): Record<string, unknown> {
     if (val !== undefined) out[key] = val;
   }
   return out;
+}
+
+/**
+ * The full result text is already delivered as the MCP `content[0].text` (the
+ * primary agent channel). Mirroring it again verbatim in `structuredContent`
+ * duplicates a large body into model context whenever a client passes the
+ * structured payload to the model. Bound it to a snippet here; the full text
+ * remains in `content[0].text`. Summaries are small and pass through unchanged.
+ */
+const RESULT_SNIPPET_CHARS = 2_000;
+
+function snippet(text: string): string {
+  if (text.length <= RESULT_SNIPPET_CHARS) return text;
+  const head = text.slice(0, RESULT_SNIPPET_CHARS).trimEnd();
+  return `${head}\n\n[… ${text.length} characters total — truncated in the lean payload; the full text is in the tool result (content[0].text).]`;
 }
 
 export type { ContentType, AccessInfo };

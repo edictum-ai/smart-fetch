@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Result } from "../src/domain/result.ts";
+import { resultToMcpText } from "../src/interfaces/mcp/format.ts";
 import { buildStructuredContent } from "../src/interfaces/mcp/shape.ts";
 
 function base(overrides: Partial<Result> = {}): Result {
@@ -192,6 +193,17 @@ test("images is an empty array (never absent) when none are found", () => {
   const lean = buildStructuredContent(base(), false);
   assert.ok("images" in lean);
   assert.deepEqual(lean.images, []);
+});
+
+test("structuredContent.result is snippeted when large; full text stays in the text channel", () => {
+  const big = "x".repeat(5000);
+  const result = base({ result: big });
+  const lean = buildStructuredContent(result, false);
+  const shaped = lean.result as string;
+  assert.ok(shaped.length < big.length, "large result must be snippeted in the lean payload");
+  assert.match(shaped, /truncated in the lean payload/);
+  // The full text is still delivered via the MCP text channel (content[0].text).
+  assert.ok(resultToMcpText(result).includes(big));
 });
 
 test("fatal errors (tier error) surface in errors; advisories become warnings", () => {

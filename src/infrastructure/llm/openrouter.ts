@@ -83,24 +83,71 @@ export class OpenRouterProvider implements LlmProvider {
   }
 
   async generate(input: LlmGenerateInput): Promise<LlmGenerateResult> {
-    const response = await postJson<OpenRouterResponse>(`${this.baseUrl}/chat/completions`, {
-      authorization: `Bearer ${this.apiKey}`,
-    }, {
-      model: input.model,
-      messages: input.messages,
-      temperature: 0,
-      max_tokens: input.maxOutputTokens,
-      response_format: input.task === "extract" ? { type: "json_object" } : undefined,
-    }, this.timeoutMs);
-    const text = response.choices?.[0]?.message?.content;
-    if (!text) throw new Error("OpenRouter returned an empty completion");
-    return {
-      text,
-      inTokens: response.usage?.prompt_tokens,
-      outTokens: response.usage?.completion_tokens,
-      costUsd: numeric(response.usage?.cost),
-    };
+    // OpenRouter (and DeepSeek behind it) intermittently return an empty
+    // completion under upstream capacity pressure — often clearing on a second
+    // attempt. Retry once before letting the router demote to the next model.
+    let lastError: Error | undefined;
+    for (let attempt = 0; attempt < GENERATE_ATTEMPTS; attempt++) {
+      try {
+        const response = await postJson<OpenRouterResponse>(`${this.baseUrl}/chat/completions`, {
+          authorization: `Bearer ${this.apiKey}`,
+        }, {
+          model: input.model,
+          messages: input.messages,
+          temperature: 0,
+          max_tokens: input.maxOutputTokens,
+          response_format: input.task === "extract" ? { type: "json_object" } : undefined,
+        }, this.timeoutMs);
+        return parseOpenRouterCompletion(response);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt < GENERATE_ATTEMPTS - 1) await sleep(RETRY_DELAY_MS);
+      }
+    }
+    throw lastError ?? new Error("OpenRouter generate failed");
   }
+}
+
+const GENERATE_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 400;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Parse an OpenRouter chat-completion response into text + usage, or throw with
+ * the REAL reason for failure. OpenRouter frequently returns HTTP 200 with the
+ * error inline (top-level `error`, per-choice `error`, or `finish_reason`) — for
+ * example DeepSeek capacity pressure surfaces as an empty `content`. Surfacing
+ * the actual reason (instead of a generic "empty completion") makes model
+ * failures diagnosable in the audit/warnings.
+ */
+export function parseOpenRouterCompletion(response: OpenRouterResponse): LlmGenerateResult {
+  const choice = response.choices?.[0];
+  const text = choice?.message?.content;
+  const topError = errorMessage(response.error);
+  const choiceError = errorMessage(choice?.error);
+  if (topError || choiceError) {
+    const code = response.error?.code ?? choice?.finish_reason ?? "error";
+    throw new Error(`OpenRouter ${code}: ${topError ?? choiceError}`);
+  }
+  if (!text) {
+    const reason = choice?.finish_reason && choice.finish_reason !== "stop"
+      ? ` (finish_reason=${choice.finish_reason})`
+      : "";
+    throw new Error(`OpenRouter returned an empty completion${reason}`);
+  }
+  return {
+    text,
+    inTokens: response.usage?.prompt_tokens,
+    outTokens: response.usage?.completion_tokens,
+    costUsd: numeric(response.usage?.cost),
+  };
+}
+
+function errorMessage(error: { message?: string } | undefined): string | undefined {
+  return error?.message?.trim() || undefined;
 }
 
 interface OpenRouterModel {
@@ -111,7 +158,12 @@ interface OpenRouterModel {
 }
 
 interface OpenRouterResponse {
-  choices?: Array<{ message?: { content?: string } }>;
+  choices?: Array<{
+    message?: { content?: string };
+    error?: { message?: string };
+    finish_reason?: string;
+  }>;
+  error?: { message?: string; code?: string };
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;

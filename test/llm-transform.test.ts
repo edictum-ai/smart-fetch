@@ -287,6 +287,28 @@ test("provider exception returns raw without erasing original fetch provenance",
   assert.deepEqual(result.errors, [{ code: "transform_provider_failed", message: "upstream broke" }]);
 });
 
+test("transform failure on a large page returns a bounded excerpt, not the full page", async () => {
+  const provider = new RecordingProvider(candidate("openrouter", "free/model", { free: true }), new Error("upstream broke"));
+  const transformer = new LlmTransformer({
+    router: new ModelRouter(provider.candidates()),
+    providers: { openrouter: provider },
+    clock: new FakeClock([10, 13]),
+  });
+  const big = "page body word. ".repeat(500); // ~8000 chars
+
+  const result = await createSmartFetchUseCase({
+    fetcher: new FakeFetcher(fetchResult({ html: "<main>x</main>" })),
+    extractHtml: new FakeExtractor(extraction({ text: big })).extract,
+    transformer,
+    clock: new FakeClock([0, 4, 5, 5, 8, 8]),
+  }).execute({ url: "https://big.test/" });
+
+  assert.equal(result.output, "raw");
+  assert.ok(result.result.length < big.length, "fallback result must be bounded, not the full page");
+  assert.match(result.result, /transform unavailable/);
+  assert.deepEqual(result.errors, [{ code: "transform_provider_failed", message: "upstream broke" }]);
+});
+
 test("router feedback demotes flaky free model before local fallback", () => {
   const router = new ModelRouter([
     candidate("openrouter", "free/model", { free: true }),
