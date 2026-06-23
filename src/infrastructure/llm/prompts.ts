@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { TransformInput } from "../../application/ports/transformer.ts";
 import type { LlmMessage } from "./types.ts";
 
@@ -31,5 +32,10 @@ function extractInstruction(input: TransformInput): string {
 }
 
 function fencedContent(content: string): string {
-  return `<untrusted_fetched_content>\n${content}\n</untrusted_fetched_content>`;
+  // Per-call random nonce fence: a fetched page cannot know the nonce, so it
+  // cannot embed the closing tag to escape the untrusted-data fence and inject
+  // instructions into the prompt (TRANSFORM-3). The fixed `</untrusted_fetched_
+  // content>` tag could be embedded by a hostile page.
+  const nonce = randomBytes(12).toString("base64url");
+  return `<untrusted-${nonce}>\n${content}\n</untrusted-${nonce}>`;
 }
