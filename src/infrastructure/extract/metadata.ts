@@ -2,7 +2,7 @@ import type { ProvenanceError } from "../../domain/result.ts";
 import type { StructuredData } from "../../domain/platform.ts";
 import { collapseWhitespace, decodeHtmlEntities } from "./entities.ts";
 import { extractAppState } from "./app-state.ts";
-import { findElements, findStartTags, firstAttr } from "./html.ts";
+import { findElements, findStartTags, firstAttr, stripHtmlTags } from "./html.ts";
 import { parseSafeJson, type SafeJsonIssue } from "./safe-json.ts";
 
 interface StringMap {
@@ -39,7 +39,7 @@ function extractTitle(html: string): string | undefined {
   const title = findElements(html, "title")[0]?.content;
   const cleaned = title === undefined
     ? ""
-    : collapseWhitespace(decodeHtmlEntities(title.replace(/<[^>]*>/g, " ")));
+    : collapseWhitespace(decodeHtmlEntities(stripHtmlTags(title)));
   return cleaned || undefined;
 }
 

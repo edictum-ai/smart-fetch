@@ -53,10 +53,51 @@ export function extractVisibleText(html: string): string {
   const body = extractBodyHtml(html) ?? stripElement(html, "head");
   const withoutCode = ["script", "style", "noscript", "template", "svg"]
     .reduce((value, tag) => stripElement(value, tag), body);
-  const text = withoutCode
-    .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<[^>]*>/g, " ");
+  // Linear scanners (not backtracking regex): a near-5MB page of unterminated
+  // `<!--`, bare `<`, or `<script>` made the old regexes quadratic (minutes of
+  // event-loop block — REDOS-1/2/3). Each scanner below is O(n).
+  const text = stripHtmlTags(stripHtmlComments(withoutCode));
   return collapseWhitespace(decodeHtmlEntities(text));
+}
+
+/**
+ * Remove `<!-- ... -->` spans linearly, replacing each with a space (matching the
+ * old `<!--[\s\S]*?-->` → " "). An unterminated `<!--` (no `-->`) keeps the text
+ * before it and stops — the remainder is malformed and dropping it avoids feeding
+ * a bare-`<` flood to stripHtmlTags.
+ */
+export function stripHtmlComments(html: string): string {
+  let out = "";
+  let cursor = 0;
+  while (cursor < html.length) {
+    const start = html.indexOf("<!--", cursor);
+    if (start === -1) { out += html.slice(cursor); break; }
+    const end = html.indexOf("-->", start + 4);
+    if (end === -1) { out += `${html.slice(cursor, start)} `; break; }
+    out += `${html.slice(cursor, start)} `;
+    cursor = end + 3;
+  }
+  return out;
+}
+
+/**
+ * Remove `<...>` tag spans linearly, replacing each with a space (matching the
+ * old `<[^>]*>` → " "). When a `<` has no following `>`, the rest is literal
+ * text — append it once and stop, avoiding the per-`<` EOS rescan that made
+ * `<[^>]*>` quadratic on a bare-`<` flood (REDOS-2).
+ */
+export function stripHtmlTags(html: string): string {
+  let out = "";
+  let cursor = 0;
+  while (cursor < html.length) {
+    const start = html.indexOf("<", cursor);
+    if (start === -1) { out += html.slice(cursor); break; }
+    const end = html.indexOf(">", start + 1);
+    if (end === -1) { out += html.slice(cursor); break; }
+    out += `${html.slice(cursor, start)} `;
+    cursor = end + 1;
+  }
+  return out;
 }
 
 export function firstAttr(
@@ -148,7 +189,43 @@ function extractBodyHtml(html: string): string | null {
 }
 
 function stripElement(html: string, tagName: string): string {
-  return html.replace(new RegExp(`<${tagName}\\b[^>]*>[\\s\\S]*?<\\/${tagName}>`, "gi"), " ");
+  // Linear: splice each element from its start tag to its close, replacing it
+  // with a space (matching the old regex's " "). The old
+  // `new RegExp(`<tag\b[^>]*>[\s\S]*?</tag>`)` was quadratic on many unterminated
+  // openers (REDOS-3). Closes are monotonic, so the first missing close means
+  // none follow — return instead of re-scanning. The close is boundary-checked so
+  // `</script` does not match `</scripture>`.
+  const wanted = tagName.toLowerCase();
+  const lower = html.toLowerCase();
+  let out = "";
+  let cursor = 0;
+  for (const tag of findStartTags(html, wanted)) {
+    if (tag.start < cursor) continue;
+    const closeStart = findCloseTag(lower, `</${wanted}`, tag.end);
+    if (closeStart === -1) {
+      // No close from here: keep text-before + opener + remainder as-is. The later
+      // tag-strip removes the start tag, so an unclosed element's content stays
+      // visible (matches the old regex's no-match behavior).
+      return out + html.slice(cursor);
+    }
+    out += `${html.slice(cursor, tag.start)} `;
+    cursor = findTagEnd(html, closeStart + 2);
+  }
+  return out + html.slice(cursor);
+}
+
+/** Find `</name` followed by a tag boundary (`>` `/` whitespace) at/after `from`. */
+function findCloseTag(lower: string, closeOpen: string, from: number): number {
+  let search = from;
+  for (;;) {
+    const at = lower.indexOf(closeOpen, search);
+    if (at === -1) return -1;
+    const next = lower[at + closeOpen.length];
+    if (next === undefined || next === ">" || next === "/" || next === " " || next === "\t" || next === "\n" || next === "\r") {
+      return at;
+    }
+    search = at + 1;
+  }
 }
 
 function setSafe(target: AttributeMap, key: string, value: string): void {

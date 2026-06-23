@@ -3,6 +3,7 @@ import type { FetcherResult } from "../ports/fetcher.ts";
 import type { Output } from "../../domain/tier.ts";
 import { sha256Hex, type ProvenanceError, type Result } from "../../domain/result.ts";
 import { decodeBody } from "../../infrastructure/http/body.ts";
+import { stripHtmlTags } from "../../infrastructure/extract/html.ts";
 import type { StructuredData } from "../../domain/platform.ts";
 import type { ShellGateEvidence } from "../../domain/shell-gate.ts";
 
@@ -189,7 +190,8 @@ function jsonLdDescription(structured: StructuredData): string | undefined {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
+  // Linear tag strip (REDOS-2): the old /<[^>]+>/g is quadratic on a bare-`<` flood.
+  return stripHtmlTags(html).replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
 }
 
 function resolvedVia(extraction: HtmlExtraction): string {
