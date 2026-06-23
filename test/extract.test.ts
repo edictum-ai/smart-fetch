@@ -5,6 +5,7 @@ import { test } from "node:test";
 import type { FetcherResult } from "../src/application/ports/fetcher.ts";
 import { extractTier1FromFetchResult, preferredTitle } from "../src/application/use-cases/tier1-extract.ts";
 import { extractHtml } from "../src/infrastructure/extract/index.ts";
+import { extractVisibleText, stripHtmlComments, stripHtmlTags } from "../src/infrastructure/extract/html.ts";
 
 const FIXTURE_DIR = join(process.cwd(), "test", "fixtures", "extract");
 
@@ -282,3 +283,75 @@ function fetchResult(finalUrl: string, html: string): FetcherResult {
     bytes: Buffer.byteLength(html),
   };
 }
+
+// REDOS-1/2/3: the extraction regexes were quadratic on pathological HTML
+// (unterminated `<!--`, bare-`<` flood, unterminated `<script>`). The linear
+// scanners are O(n); these guard against a quadratic regression and pin the
+// spacing / close-tag-boundary behavior the old regexes had.
+test("stripHtmlTags scales linearly on a bare-`<` flood (REDOS-2)", () => {
+  assert.equal(stripHtmlTags("<".repeat(1000)), "<".repeat(1000)); // no '>' → literal
+  // CI-independent regression guard: a 4x input must take ~4x (linear), not ~16x
+  // (quadratic). Ratio avoids flaking on slow/loaded runners, unlike a fixed
+  // wall-clock budget.
+  const timed = (n: number): number => {
+    const t = performance.now();
+    stripHtmlTags("<".repeat(n));
+    return performance.now() - t;
+  };
+  timed(200_000); // JIT warmup
+  const ratio = timed(800_000) / Math.max(timed(200_000), 1);
+  assert.ok(ratio < 8, `stripHtmlTags 800k/200k ratio ${ratio.toFixed(1)} — likely quadratic`);
+});
+
+test("stripHtmlTags replaces tags with spaces so words don't merge", () => {
+  const out = stripHtmlTags("<a>x</a><b>y</b>");
+  assert.doesNotMatch(out, /xy/, "adjacent tags must not merge their text");
+  assert.match(out, /x/);
+  assert.match(out, /y/);
+});
+
+test("stripHtmlComments is linear on unterminated `<!--` and replaces with a space", () => {
+  assert.equal(stripHtmlComments("<!--".repeat(50_000)), " "); // no '-->' → stop
+  assert.equal(stripHtmlComments("a<!-- c -->b"), "a b");
+});
+
+test("extractVisibleText completes on pathological floods without hanging (REDOS-1/2/3)", () => {
+  const pathological = `<html><body>${"<script>".repeat(20_000)}${"<!--".repeat(20_000)}${"<".repeat(20_000)}</body></html>`;
+  assert.equal(typeof extractVisibleText(pathological), "string");
+});
+
+test("extractVisibleText separates words across tags (no merge regression)", () => {
+  const text = extractVisibleText("<html><body><h1>Heading</h1><p>Hello</p></body></html>");
+  assert.match(text, /Heading Hello/, "a space where each tag was");
+});
+
+test("extractVisibleText does not treat </scripture> as a </script> close", () => {
+  const html = `<html><body><script>var s = "</scripture>";</script><p>Visible</p></body></html>`;
+  const text = extractVisibleText(html);
+  assert.match(text, /Visible/);
+  assert.doesNotMatch(text, /scripture|var s/i, "script content removed via the real </script> close");
+});
+
+test("extractVisibleText still strips script/style/comments/tags on well-formed HTML", () => {
+  const html = `<html><head><style>.x{color:red}</style></head><body><script>var x=1;</script><!-- note --><h1>Heading</h1><p>Hello &amp; world</p></body></html>`;
+  const text = extractVisibleText(html);
+  assert.match(text, /Heading/);
+  assert.match(text, /Hello & world/);
+  assert.doesNotMatch(text, /var x|note|color:red/, "script/style/comment content removed");
+});
+
+test("extractHtml scales linearly on a <title> bare-`<` flood (REDOS-2 in metadata.ts)", () => {
+  const html = (n: number): string => `<html><head><title>${"<".repeat(n)}</title></head><body>x</body></html>`;
+  // CI-independent regression guard (see stripHtmlTags test): 4x input must cost
+  // ~4x, not ~16x. Smaller sizes than the stripHtmlTags test — extractHtml does
+  // more work per character.
+  const timed = (n: number): number => {
+    const t = performance.now();
+    extractHtml({ html: html(n), url: "https://example.test/" });
+    return performance.now() - t;
+  };
+  timed(50_000); // JIT warmup
+  const ratio = timed(200_000) / Math.max(timed(50_000), 1);
+  assert.equal(typeof extractHtml({ html: html(100), url: "https://example.test/" }).title, "string");
+  assert.ok(ratio < 8, `extractHtml title 200k/50k ratio ${ratio.toFixed(1)} — likely quadratic`);
+});
