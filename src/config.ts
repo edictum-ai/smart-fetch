@@ -14,9 +14,6 @@ export const config = {
     allowedHosts: () => envList("MCP_ALLOWED_HOSTS"),
     allowedOrigins: () => envList("MCP_ALLOWED_ORIGINS"),
   },
-  auth: {
-    localHeaderMode: () => envString("LOCAL_HEADER_MODE", "false") === "true",
-  },
   cloudflareAccess: {
     enabled: () => envString("CF_ACCESS_ENABLED", "false") === "true",
     allowedEmail: () => envString("CF_ACCESS_ALLOWED_EMAIL", ""),
