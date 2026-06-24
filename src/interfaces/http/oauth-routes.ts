@@ -16,6 +16,7 @@ export interface OAuthRoutesDeps {
   store: StorePort;
   clock: ClockPort;
   audit: AuditLoggerPort;
+  allowedOrigins: string[];
 }
 
 const CONSENT_COOKIE = "smart_fetch_consent";
@@ -40,12 +41,7 @@ async function resolveSubject(headers: FastifyRequest["headers"]): Promise<strin
   if (!verified.ok) throw new OAuthError("access_denied", `Cloudflare Access JWT rejected: ${verified.reason}`, 401);
   return verified.claims.email;
 }
-
-function headerString(headers: FastifyRequest["headers"], name: string): string | undefined {
-  const value = headers[name];
-  return typeof value === "string" ? value : Array.isArray(value) ? value[0] : undefined;
-}
-
+function headerString(headers: FastifyRequest["headers"], name: string): string | undefined { const v = headers[name]; return typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined; }
 export async function registerOAuthRoutes(app: FastifyInstance, deps: OAuthRoutesDeps): Promise<void> {
   addFormParser(app);
   const authorization = new OAuthAuthorizationUseCase(deps);
@@ -75,12 +71,16 @@ export async function registerOAuthRoutes(app: FastifyInstance, deps: OAuthRoute
 
   app.post("/oauth/authorize/approve", async (request, reply) => {
     try {
+      // OAUTH-4: CSRF defense — reject cross-origin POSTs. The consent form is
+      // same-origin (served by this gateway), so allow the issuer origin too.
+      const origin = headerString(request.headers, "origin");
+      const issuerOrigin = deps.config.issuer.replace(/\/$/, "");
+      if (origin && !deps.allowedOrigins.includes(origin) && origin !== issuerOrigin) {
+        return sendError(reply, new OAuthError("invalid_origin", "Origin not allowed", 403));
+      }
       const body = objectBody(request.body);
       const approved = body.approved === undefined ? true : body.approved === true || body.approved === "true";
-      const result = await authorization.approve({
-        approved,
-        consentToken: stringField(body.consent_token) ?? consentCookie(request) ?? "",
-      });
+      const result = await authorization.approve({ approved, consentToken: stringField(body.consent_token) ?? consentCookie(request) ?? "" });
       reply.code(302).header("location", result.redirectTo).send();
     } catch (error) {
       return sendError(reply, error);
