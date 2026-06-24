@@ -62,6 +62,7 @@ export async function createHttpApp(deps: HttpAppDeps): Promise<FastifyInstance>
       store: deps.store,
       clock: deps.clock,
       audit: deps.audit,
+      allowedOrigins: deps.allowedOrigins,
     });
   }
 

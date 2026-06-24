@@ -117,8 +117,11 @@ COREPACK_HOME=/private/tmp/smart-fetch-corepack PNPM_HOME=/private/tmp/smart-fet
 Result on `2026-06-16`: **failed** with 5 advisories against transitive
 `hono@4.12.23` through `@modelcontextprotocol/sdk@1.29.0` (1 high, 4 moderate;
 patched `hono >=4.12.25`). The patched `hono@4.12.25` was rechecked in the npm
-registry and was published `2026-06-09T03:28:50.819Z`, so it does **not** clear
-the 15-day rule on `2026-06-16`. No eligible audit-clean override exists yet.
+registry and was published `2026-06-09T03:28:50.819Z`, so it did **not** clear
+the 15-day rule on `2026-06-16`. The override was added on `2026-06-17` as a
+deliberate one-time `minimumReleaseAge` exception to close the HIGH CORS +
+4 moderate advisories (commit `24a3dd4`). As of `2026-06-24` the pin is 15 days
+old and clears the gate normally — no exception is needed going forward.
 This audit blocker is unrelated to the new `playwright@1.60.0` pin.
 
 ## Current package state
