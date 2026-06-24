@@ -53,8 +53,9 @@ One tool. Input (v0):
 | `maxBytes` | no | Response byte cap (decompressed). Default 5 MB, server hard-capped. |
 | `timeoutMs` | no | Per-tier wall-clock. Default 15 s (Tier-1/2), 20 s (Tier-3). |
 | `allowRender` | no | Default **false**. If false, Tier-3 is skipped and provenance reports `render-blocked`. |
+| `debug` | no | Default **false**. When true, the MCP `structuredContent` adds heavy diagnostic fields (`attempts`, `timings`, full `structured` incl. JSON-LD `description`/`articleBody`, `redirects`, `durationMs`, `httpContentType`, `contentSha256`, `provenanceHash`, verbose `transform`). Default payload is lean (see "MCP structuredContent"). |
 
-**Default behavior is `output: summary`** — resolved content is passed through the Transform router (free-first OpenRouter, or local Ollama) to produce a token-efficient answer to `prompt`. This is exactly the role WebFetch's Haiku step plays, but cheaper and fed by accurate rendered/extracted content. `output: raw` returns the clean resolved content (markdown + parsed structured data) with no LLM pass. Output is MCP `text` with a provenance line as the first line (HTML-comment-wrapped, always model-visible), mirrored as `structuredContent` per the Result schema. Token-efficiency signals (`bytes`, `contentType`, `transform.inTokens/outTokens`) let the caller follow up.
+**Default behavior is `output: summary`** — resolved content is passed through the Transform router (free-first OpenRouter, or local Ollama) to produce a token-efficient answer to `prompt`. This is exactly the role WebFetch's Haiku step plays, but cheaper and fed by accurate rendered/extracted content. `output: raw` returns the clean resolved content (markdown + parsed structured data) with no LLM pass. Output is MCP `text` with a provenance line as the first line (HTML-comment-wrapped, always model-visible). For `summary`/`extract`, a **deterministic envelope header** (backend-generated, not LLM) follows the provenance line — `contentType`, `title`, `finalUrl`, `access` (public | gated + reason), `images` count + first URL, `transformModel` — so every client (including ones that surface `content` text but not `structuredContent`) sees the key fields; `raw` output omits it. The companion `structuredContent` is a **lean agent payload** (see "MCP structuredContent"), not the full Result — heavy fields are gated behind `debug`. Token-efficiency signals (`bytes`, `contentType`, `transform.inTokens/outTokens`) let the caller follow up.
 
 ## Provenance / Result schema
 
@@ -79,7 +80,7 @@ Result {
   attempts: [{ step, tier, outcome, status?, durationMs, bytes?, reason? }],
   contentType,
   title,                                          // when derivable
-  structured: { canonicalUrl?, jsonLd?, og?, meta?, appState? }, // parsed from raw HTML (present when found)
+  structured: { canonicalUrl?, jsonLd?, og?, meta?, appState?, images? }, // parsed from raw HTML (present when found); images = bounded absolute http(s) image URLs (og:image*, JSON-LD image/ImageObject, <img>/<source srcset>); private/localhost hosts stripped, never fetched by this service
   transform: { provider, model?, free?, inTokens?, outTokens?, latencyMs?, costUsd?, reason?, schemaIssue? }, // present on summary/extract or fallback; schemaIssue carries the non-fatal extract-schema advisory message
   timings: { totalMs, fetchMs, renderMs?, transformMs? },
   errors: [{ code, message }],
@@ -93,6 +94,71 @@ core still returns a contract-shaped `Result`: `code: 0`,
 `codeText: "FETCH_REJECTED"`, `tier: "error"`, `resolvedVia:
 "guarded-fetch"`, `errors[0]` preserves the original guarded-fetch
 `{ code, message }`, and extraction/render/transform are not called.
+
+## MCP structuredContent (agent-facing, lean)
+
+The `Result` above is the **internal** record (full provenance, used by tests,
+the audit log, and `debug` mode). What the tool returns as MCP
+`structuredContent` is a **lean agent payload** built from that Result: it keeps
+the load-bearing primitives agents/connectors already read at the same paths
+(`result`, `tier`, `title`, `output`, `code`, `bytes`, `platform`, `errors`,
+lean `transform`) and adds a tiered envelope, while gating the heavy diagnostic
+fields behind `debug: true`. The MCP `text` content (provenance line + result)
+is unchanged either way — that is the primary agent channel.
+
+Default (lean) `structuredContent`:
+
+```
+{
+  schemaVersion: 1,
+  ok: boolean,                         // status !== "fail"
+  status: "pass" | "partial" | "fail",
+  url, finalUrl, title, output,
+  contentType: "article" | "job" | "pin" | "product" | "spa" | "unknown",   // classified from JSON-LD @type / og:type / host / jsRequired (distinct from the raw HTTP contentType)
+  result,                              // summary text | raw content | extracted JSON (string)
+  tier, code, codeText, bytes,         // kept for existing consumers
+  resolvedVia, platform, jsRequired,
+  access: { mainContentAccessible, gated, gateReason: "paywall"|"login"|"captcha"|"byte_cap"|"none" },
+  provenance: { tier, resolvedVia, code, bytes },     // convenience envelope
+  warnings: [{ code, message }],       // non-fatal (tier !== "error"): advisories, render-failed-but-tier1-ok, byte-cap truncation, extract_schema_invalid
+  images: ["https://…"],               // bounded absolute http(s) URLs for optional multimodal vision fetch
+  errors: [{ code, message }],         // fatal only (tier === "error")
+  transform: { provider, model?, free?, inTokens?, outTokens? },   // lean token-efficiency signal; present when a transform ran
+}
+```
+
+Rules:
+- **errors vs warnings:** fatal ⟺ `tier === "error"` (per the note above: "advisory entries never set `tier: error`"). Everything else in `Result.errors` becomes a `warning`.
+- **status:** `fail` when `tier === "error"` or no body content was returned; `partial` when content was returned but warnings exist or the summary/extract transform fell back to raw (`transform.provider === "none"`); else `pass`.
+- **access.gateReason:** `paywall` when JSON-LD declares `isAccessibleForFree: false`; `byte_cap` when the response was truncated at the cap; `login` when no content was returned on a page that needed JS we could not run (render-blocked/render-unavailable/`jsRequired`); else `none`.
+- **contentType:** `pin` for pinterest.*/pin.it hosts; else from the first content-bearing JSON-LD `@type` (`JobPosting`→job, `Product`→product, Article family→article); else `og:type`; else `spa` when `jsRequired`; else `unknown`.
+- **images:** never fetched by this service — surfaced for the calling agent's optional vision fetch. Private/loopback hosts are stripped (string check, no DNS).
+- **result:** snippeted to ~2000 chars in `structuredContent` when large; the full text is always delivered as MCP `content[0].text` (the primary agent channel), so mirroring a huge body in the structured payload would only duplicate tokens. Summaries are small and pass through unchanged.
+
+`debug: true` adds the heavy fields (`attempts`, `timings`, full `structured`
+including JSON-LD `description`/`articleBody`, `redirects`, `durationMs`,
+`httpContentType`, `contentSha256`, `provenanceHash`, and the verbose `transform`
+with `latencyMs`/`costUsd`/`schemaIssue`) and replaces the lean `transform` with
+the full one. The lean payload never carries the full `structured` blob, so
+JSON-LD `description`/`articleBody` no longer duplicate the `result` text by
+default. The lean `transform` keeps `reason` (the small fallback signal that
+distinguishes a real summary from a silent raw fallback); only `latencyMs`/
+`costUsd`/`schemaIssue` are debug-gated.
+
+**v0 wire-shape evolution (noted breaking changes vs the previous default
+`structuredContent`):** under v0 (fields may be added freely; removals/renames
+are breaking and noted here) the default payload now (a) drops `timings` and the
+`structured` blob (moved behind `debug`), (b) moves non-fatal advisories out of
+`errors` into `warnings` (so `errors` now holds fatal entries only — `tier:
+"error"`), and (c) trims `transform` to the lean fields above. The MCP `text`
+channel and the load-bearing primitives (`result`, `tier`, `title`, `output`,
+`code`, `bytes`, `platform`, `errors` for fatal cases) are unchanged. Consumers
+that read `structuredContent.timings`, `structuredContent.structured`, or
+success-tier `errors` should pass `debug: true` or read `warnings`. The domain
+`Result` and its `schemaVersion: 1` are unchanged — only the presentation changed.
+
+`access.gateReason: "captcha"` is reserved in the union but not yet emitted (no
+detector); captcha/challenge pages currently fall to `"login"` or `"none"`.
 
 ## Ports
 
@@ -160,7 +226,7 @@ Provider-configurable via `transform`: **OpenRouter** (default; OpenAI-compatibl
 
 Privacy: fetched content is mostly public web content; the only egress risk is non-public content (authed/signed URLs, internal hosts) → detect via signals and route to Ollama or skip.
 
-**Setup & fallback.** Configure `OPENROUTER_API_KEY` (OpenRouter) and/or `OLLAMA_BASE_URL` (local Ollama) in the environment; `OPENROUTER_MODELS` overrides the comma-separated OpenRouter fallback list, `OPENROUTER_BASE_URL` overrides the API base, `OLLAMA_MODEL` selects the local model, and `TRANSFORM_TIMEOUT_MS` sets provider-call timeouts. The router uses whichever is configured (OpenRouter default, Ollama override for sensitive/local). An MCP tool **cannot** see or use the calling agent's own model or credentials, so there is no "use the caller's model" path. **If no transform provider is configured, `output: summary` degrades to `output: raw`** (clean resolved content, no LLM) and provenance records `transform: { provider: "none", reason: "unconfigured" }`. If a configured transform fails, the core returns raw content with `transform: { provider: "none", reason: "failed" }` and a structured transform error such as `transform_provider_failed`, `extract_invalid_json`, or `extract_schema_invalid`. Because summary is the default output, this setup is first-run-critical and must be documented prominently in the tool description and `docs/`.
+**Setup & fallback.** Configure `OPENROUTER_API_KEY` (OpenRouter) and/or `OLLAMA_BASE_URL` (local Ollama) in the environment; `OPENROUTER_MODELS` overrides the comma-separated OpenRouter fallback list, `OPENROUTER_BASE_URL` overrides the API base, `OLLAMA_MODEL` selects the local model, and `TRANSFORM_TIMEOUT_MS` sets provider-call timeouts. The router uses whichever is configured (OpenRouter default, Ollama override for sensitive/local). An MCP tool **cannot** see or use the calling agent's own model or credentials, so there is no "use the caller's model" path. **If no transform provider is configured, `output: summary` degrades to `output: raw`** (clean resolved content, no LLM) and provenance records `transform: { provider: "none", reason: "unconfigured" }`. If a configured transform fails, the core returns raw content with `transform: { provider: "none", reason: "failed" }` and a structured transform error such as `transform_provider_failed`, `extract_invalid_json`, or `extract_schema_invalid`. **The fallback is token-safe:** when the transform did not produce a summary, the returned `result` is bounded to a ~3000-char excerpt with a note (the full page is still available via `output: "raw"`) — a failed summary never dumps the entire page into the agent context. The OpenRouter adapter retries once on an empty/error completion (transient upstream capacity) before the router demotes to the next candidate model, and surfaces OpenRouter's real inline error (top-level `error`, per-choice `error`, `finish_reason`) instead of a generic "empty completion", so the failure reason is visible in `warnings`. **Model fallback is surfaced, not silent:** when the primary model (e.g. `deepseek/deepseek-v4-flash`) fails and the router produces the summary with a later candidate (e.g. `openrouter/auto`), a non-fatal `transform_model_fallback` warning is added and `status` becomes `partial` (not `pass`) — the caller knows the output may be lower quality. To reduce the prompt size that was failing the primary model on large pages, `articleBody`/`description` are stripped from the JSON-LD fed to the transform (they duplicate the body text already in the input); the body itself is unaffected. Because summary is the default output, this setup is first-run-critical and must be documented prominently in the tool description and `docs/`.
 
 ## OAuth (hosted flavor only)
 
@@ -226,7 +292,9 @@ transform seams; they do not require public internet or secrets.
 - `render-disabled.json` — an empty SPA shell with default `allowRender: false`
   returns `tier: "render-blocked"` and records the skipped render attempt.
 
-Example `structuredContent` shape from `raw-safe.json`:
+The fixture `structuredContent` field locks the **full domain `Result`** record
+returned by the use case (not the lean MCP payload above — see "MCP
+structuredContent"). Example from `raw-safe.json`:
 
 ```json
 {

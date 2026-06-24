@@ -19,7 +19,11 @@
 #  6  live probe (POST /mcp → expect 401, i.e. alive + auth-gating)
 set -euo pipefail
 
-AWS_PROFILE="${AWS_PROFILE:-personal-arnold}"
+# Hard-coded: this script is Captatum-specific (the ECR repo, cluster, and tofu
+# env below all live in the personal-arnold account). Do NOT inherit a globally
+# exported AWS_PROFILE (e.g. edictum-prod) — that silently authenticated ECR
+# pushes as the wrong account and aborted at the push gate.
+AWS_PROFILE="personal-arnold"
 REGION="eu-central-1"
 ACCOUNT="291807115868"
 GW_REPO="personal-memory-prod-smart-fetch"

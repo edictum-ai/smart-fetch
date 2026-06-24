@@ -54,7 +54,9 @@ test("default summary with unconfigured router returns raw fallback provenance",
   }).execute({ url: "https://fallback.test/" });
 
   assert.equal(result.output, "raw");
-  assert.equal(result.result, "Raw fallback body");
+  // Fallback returns the transform content, which now carries the page-metadata envelope hint.
+  assert.match(result.result, /Page metadata:/);
+  assert.ok(result.result.endsWith("Raw fallback body"));
   assert.deepEqual(result.transform, { provider: "none", reason: "unconfigured" });
 });
 
@@ -285,6 +287,55 @@ test("provider exception returns raw without erasing original fetch provenance",
   assert.equal(result.finalUrl, "https://summary.test/final");
   assert.deepEqual(result.attempts.map((attempt) => attempt.reason), ["content-present"]);
   assert.deepEqual(result.errors, [{ code: "transform_provider_failed", message: "upstream broke" }]);
+});
+
+test("transform failure on a large page returns a bounded excerpt, not the full page", async () => {
+  const provider = new RecordingProvider(candidate("openrouter", "free/model", { free: true }), new Error("upstream broke"));
+  const transformer = new LlmTransformer({
+    router: new ModelRouter(provider.candidates()),
+    providers: { openrouter: provider },
+    clock: new FakeClock([10, 13]),
+  });
+  const big = "page body word. ".repeat(500); // ~8000 chars
+
+  const result = await createSmartFetchUseCase({
+    fetcher: new FakeFetcher(fetchResult({ html: "<main>x</main>" })),
+    extractHtml: new FakeExtractor(extraction({ text: big })).extract,
+    transformer,
+    clock: new FakeClock([0, 4, 5, 5, 8, 8]),
+  }).execute({ url: "https://big.test/" });
+
+  assert.equal(result.output, "raw");
+  assert.ok(result.result.length < big.length, "fallback result must be bounded, not the full page");
+  assert.match(result.result, /transform unavailable/);
+  assert.deepEqual(result.errors, [{ code: "transform_provider_failed", message: "upstream broke" }]);
+});
+
+test("router fallback surfaces fallbackFrom on the transform info", async () => {
+  const provider: LlmProvider = {
+    id: "openrouter",
+    candidates: () => [
+      candidate("openrouter", "deepseek/deepseek-v4-flash"),
+      candidate("openrouter", "openrouter/auto"),
+    ],
+    async generate(input: LlmGenerateInput): Promise<LlmGenerateResult> {
+      if (input.model === "deepseek/deepseek-v4-flash") throw new Error("empty completion");
+      return { text: "Real summary produced by the fallback model." };
+    },
+  };
+  const transformer = new LlmTransformer({
+    router: new ModelRouter(provider.candidates()),
+    providers: { openrouter: provider },
+  });
+  const result = await transformer.transform({
+    mode: "summarize",
+    output: "summary",
+    content: "page body",
+    prompt: "Summarize",
+  });
+  assert.equal(result.info.model, "openrouter/auto");
+  assert.equal(result.info.fallbackFrom, "deepseek/deepseek-v4-flash");
+  assert.equal(result.result, "Real summary produced by the fallback model.");
 });
 
 test("router feedback demotes flaky free model before local fallback", () => {

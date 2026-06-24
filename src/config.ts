@@ -45,7 +45,11 @@ export const config = {
     openRouterBaseUrl: () => envString("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     openRouterModels: () => envString(
       "OPENROUTER_MODELS",
-      "deepseek/deepseek-v4-flash,openrouter/auto",
+      // Primary = deepseek-v4-flash (cheap, 1M context). Fallback = qwen3.6-flash —
+      // a DIFFERENT lab (Alibaba) so a DeepSeek upstream outage doesn't take down
+      // the fallback too; flash-tier (cheap), 1M context, current (2026-04-27). NOT
+      // openrouter/auto (unpredictable routing → garbage) and not a stale model.
+      "deepseek/deepseek-v4-flash,qwen/qwen3.6-flash",
     ),
     ollamaBaseUrl: () => envString("OLLAMA_BASE_URL", ""),
     ollamaModel: () => envString("OLLAMA_MODEL", "llama3.1"),

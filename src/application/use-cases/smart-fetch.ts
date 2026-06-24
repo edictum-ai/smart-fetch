@@ -11,6 +11,7 @@ import {
 } from "./tier1-extract.ts";
 import { maybeRender } from "./render.ts";
 import { resolveAshbyEmbedUrl } from "../../infrastructure/ashby/embed-resolver.ts";
+import { fallbackExcerpt } from "./result-excerpt.ts";
 import { transformContent } from "./transform-content.ts";
 import {
   DEFAULT_SMART_FETCH_DEFAULTS,
@@ -123,6 +124,7 @@ export class SmartFetchUseCase {
       base.output = "raw";
       base.transform = { provider: "none", reason: "unconfigured" };
       base.timings.transformMs = 0;
+      base.result = fallbackExcerpt(base.result);
       stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
       return base;
     }
@@ -148,15 +150,24 @@ export class SmartFetchUseCase {
       base.transform = { provider: "none", reason: "failed", latencyMs: transformMs };
       base.timings.transformMs = transformMs;
       base.errors.push({ code: transformErrorCode(error), message: errorMessage(error, "Transform failed") });
+      base.result = fallbackExcerpt(base.result);
       stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
       return base;
     }
     base.result = transformed.result;
     base.output = transformed.info.provider === "none" ? "raw" : request.requestedOutput;
     base.transform = transformed.info;
-    // Non-fatal: extract returned parsed JSON that violated the requested schema.
-    // The data is kept (advisory), but the mismatch is surfaced so the caller
-    // is not silently handed schema-violating structured data.
+    // Non-fatal: primary model(s) failed and the router fell back — surface it so
+    // status becomes `partial` (not `pass`) and the caller knows the output may be lower quality.
+    if (transformed.info.fallbackFrom) {
+      base.errors.push({
+        code: "transform_model_fallback",
+        message: `Primary model(s) ${transformed.info.fallbackFrom} failed; produced this ${base.output} with ${transformed.info.model ?? transformed.info.provider}. It may be lower quality — retry if it looks off.`,
+      });
+    }
+    // Token-safe: bound a raw fallback so a failed summary does not dump the whole page.
+    if (transformed.info.provider === "none") base.result = fallbackExcerpt(base.result);
+    // Non-fatal advisory: extract returned parsed JSON that violated the requested schema.
     if (transformed.info.schemaIssue) {
       base.errors.push({ code: "extract_schema_invalid", message: transformed.info.schemaIssue });
     }
