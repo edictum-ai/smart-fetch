@@ -26,6 +26,11 @@ export function normalizeRedirectUrl(location: string, base: URL): NormalizedUrl
   } catch {
     reject("invalid_url", "Redirect URL is invalid");
   }
+  // SSRF-6: block https→http downgrade — the final hop's URL/response would be
+  // exposed to an on-path attacker over cleartext.
+  if (base.protocol === "https:" && parsed.protocol === "http:") {
+    reject("scheme_downgrade", "Redirect downgrades from https to http");
+  }
   return normalizeParsedUrl(parsed);
 }
 
