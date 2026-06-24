@@ -35,3 +35,23 @@ test("required checks own properties, not inherited ones", () => {
   // `constructor` exists on the prototype but not as an own property of {}.
   assert.equal(validateJsonSchema({ name: "x" }, schema).valid, false);
 });
+
+test("schema pattern with nested quantifiers is rejected as unsupported (TRANSFORM-2)", () => {
+  const r = validateJsonSchema("aaa", { pattern: "^(a+)+$" });
+  assert.equal(r.valid, false);
+  assert.equal(r.unsupported, true, "catastrophic pattern must be rejected as unsupported");
+});
+
+test("schema pattern with wrapped nested quantifiers is rejected (TRANSFORM-2)", () => {
+  // ((a+))+ — the inner group's quantifier propagates to the enclosing group.
+  assert.equal(validateJsonSchema("aaa", { pattern: "^((a+))+$" }).unsupported, true);
+});
+
+test("schema pattern exceeding the length cap is rejected (TRANSFORM-2)", () => {
+  assert.equal(validateJsonSchema("x", { pattern: "a".repeat(200) }).valid, false);
+});
+
+test("a normal schema pattern still validates (TRANSFORM-2 regression)", () => {
+  assert.equal(validateJsonSchema("12345", { pattern: "^\\d+$" }).valid, true);
+  assert.equal(validateJsonSchema("abc", { pattern: "^\\d+$" }).valid, false);
+});

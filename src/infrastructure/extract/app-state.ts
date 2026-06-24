@@ -44,7 +44,12 @@ function parseInto(
 
 function findInitialStateLiterals(source: string): string[] {
   const literals = [] as string[];
+  let markersProcessed = 0;
   for (const match of source.matchAll(INITIAL_STATE_RE)) {
+    // Cap MARKERS processed (DoS): count every marker, not just successful parses,
+    // so malformed/unterminated markers still hit the cap.
+    if (markersProcessed >= 32) break;
+    markersProcessed += 1;
     const offset = match.index === undefined ? -1 : match.index + match[0].length;
     if (offset < 0) continue;
     const literalStart = skipWhitespace(source, offset);
@@ -62,8 +67,12 @@ function readJsonLiteral(source: string, start: number): string | null {
   const stack = [closeFor];
   let inString = false;
   let escaped = false;
+  // Cap the scan (DoS): an unterminated literal otherwise scans to EOS, and many
+  // markers make it quadratic (audit: ~807ms at 3,200 markers). 256 KiB is far
+  // beyond any real __INITIAL_STATE__ payload.
+  const maxScan = start + 1 + 256 * 1024;
 
-  for (let index = start + 1; index < source.length; index += 1) {
+  for (let index = start + 1; index < source.length && index <= maxScan; index += 1) {
     const char = source[index];
     if (inString) {
       if (escaped) {
