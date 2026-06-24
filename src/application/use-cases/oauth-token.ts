@@ -149,10 +149,10 @@ export class OAuthTokenUseCase {
     );
     if (!record) throw new OAuthError("invalid_grant", "Authorization code is invalid");
     if (input.clientId !== record.clientId || input.redirectUri !== record.redirectUri) {
-      throw new OAuthError("invalid_grant", "Authorization code binding is invalid");
+      throw new OAuthError("invalid_grant", "Authorization code is invalid");
     }
     if (!verifyPkceS256(required(input.codeVerifier, "code_verifier"), record.codeChallenge)) {
-      throw new OAuthError("invalid_grant", "PKCE verifier is invalid");
+      throw new OAuthError("invalid_grant", "Authorization code is invalid");
     }
     return record;
   }

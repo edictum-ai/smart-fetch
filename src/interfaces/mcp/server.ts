@@ -55,7 +55,13 @@ async function callSmartFetch(args: unknown, deps: SmartFetchMcpServerDeps): Pro
     const normalized = normalizeSmartFetchInput(args);
     requireScope(deps.auth, requiredScopeForSmartFetch(args));
     const result = await deps.smartFetch.execute(args, { fetchedAt: new Date(deps.clock.nowMs()).toISOString() });
-    await auditResult(deps, result);
+    // AUDIT-1: audit write in its own try/catch — a rejecting sink must never
+    // convert a successful fetch into a client error.
+    try {
+      await auditResult(deps, result);
+    } catch (auditError) {
+      process.stderr.write(`captatum: audit write failed: ${auditError instanceof Error ? auditError.message : auditError}\n`);
+    }
     return {
       content: [{ type: "text", text: resultToMcpText(result) }],
       structuredContent: buildStructuredContent(result, normalized.debug),

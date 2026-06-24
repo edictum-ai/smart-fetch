@@ -27,7 +27,7 @@ function envelopeHeader(result: Result): string {
   const images = result.structured?.images ?? [];
   const lines: Array<string | null> = [
     `contentType: ${classifyContentType(result)}`,
-    result.title ? `title: ${clip(result.title, 140)}` : null,
+    result.title ? `title: ${clip(sanitizePrintable(result.title), 140)}` : null,
     `finalUrl: ${redactSignedQueryParams(result.finalUrl)}`,
     `access: ${access.gated ? `gated (${access.gateReason})` : "public"}`,
     `images: ${images.length}${images[0] ? ` (e.g. ${images[0]})` : ""}`,
@@ -52,6 +52,12 @@ function provenanceLine(result: Result): string {
 
 function escapeField(value: string): string {
   return JSON.stringify(value).slice(1, -1).replaceAll("--", "\\u002d\\u002d");
+}
+
+/** Strip ALL control chars (incl. CR/LF — header-line forging), bidi overrides,
+ *  and zero-width chars from untrusted display fields (INJ-7). */
+function sanitizePrintable(value: string): string {
+  return value.replace(/[\x00-\x1f\x7f​-‏‪-‮]/g, "");
 }
 
 function clip(value: string, max: number): string {
