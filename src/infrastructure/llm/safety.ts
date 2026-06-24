@@ -89,7 +89,7 @@ function signedUrlReason(sourceUrl: string): string | undefined {
 
 function internalHostReason(sourceUrl: string): string | undefined {
   try {
-    const host = new URL(sourceUrl).hostname.toLowerCase();
+    const host = new URL(sourceUrl).hostname.toLowerCase().replace(/\.$/, "");
     if (host === "localhost" || INTERNAL_HOST_SUFFIXES.some((s) => host === s.slice(1) || host.endsWith(s))) {
       return "internal_host";
     }

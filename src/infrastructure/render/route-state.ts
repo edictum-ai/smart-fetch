@@ -34,6 +34,8 @@ export class RenderRouteState {
   redirects: FetcherResult["redirects"] = [];
   fatal?: RejectResult;
   private mainFrame?: PlaywrightFrame;
+  private bytesFulfilled = 0;
+  private budgetExceeded = false;
 
   constructor(input: RenderInput, actions: RenderAction[], guard: BrowserUrlGuard) {
     this.input = input;
@@ -76,6 +78,9 @@ export class RenderRouteState {
     if (request.method() !== "GET") {
       return this.abort(route, url, resourceType, "unsupported_browser_method");
     }
+    if (this.budgetExceeded) {
+      return this.abort(route, url, resourceType, "render_byte_budget", "resource-aborted");
+    }
     const outcome = await this.fulfiller.resolve(url, resourceType);
     const mainFrameNav = isNavigation(request) && this.isMainFrame(request);
     if (outcome.kind === "reject") {
@@ -100,6 +105,13 @@ export class RenderRouteState {
       // fulfilled redirect for a navigation. Render-fidelity limit for
       // cross-origin redirects only — every hop was guard-validated, not an SSRF gap.
     }
+    // TIER3-DOS-1: abort this response if it would push cumulative bytes over the
+    // render budget. The response that crosses the cap is NOT fulfilled.
+    if (this.bytesFulfilled + outcome.body.byteLength > this.input.maxBytes) {
+      this.budgetExceeded = true;
+      return this.abort(route, url, resourceType, "render_byte_budget", "resource-aborted");
+    }
+    this.bytesFulfilled += outcome.body.byteLength;
     await route.fulfill({
       status: outcome.status,
       body: outcome.body,
