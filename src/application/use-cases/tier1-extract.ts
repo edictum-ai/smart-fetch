@@ -7,6 +7,12 @@ import { stripHtmlTags } from "../../infrastructure/extract/html.ts";
 import type { StructuredData } from "../../domain/platform.ts";
 import type { ShellGateEvidence } from "../../domain/shell-gate.ts";
 
+/** REDOS-4: character budget for the synchronous HTML extraction input. The
+ *  linear scanners are O(n) but a future parser change or undiscovered CPU sink
+ *  could still block the event loop on a 5MB page. 1M chars is far beyond any
+ *  real page's structured-data region. */
+const EXTRACT_CHAR_BUDGET = 1_000_000;
+
 export interface HtmlExtractionInput {
   html: string;
   url: string;
@@ -34,9 +40,19 @@ export interface Tier1ExtractInput {
 }
 
 export async function extractTier1FromFetchResult(input: Tier1ExtractInput): Promise<Result> {
-  const html = await decodeBody(input.fetchResult.bodyStream, input.fetchResult.contentType);
+  const fullHtml = await decodeBody(input.fetchResult.bodyStream, input.fetchResult.contentType);
+  // REDOS-4: cap the HTML passed to the synchronous extractor. The linear scanners
+  // are O(n), but a future parser change or undiscovered CPU sink could still
+  // block the event loop on a 5MB page. 1MB is far beyond any real page's
+  // structured-data region; content beyond it is body text the extractor already
+  // truncates internally. A worker_thread is the fuller isolation but adds
+  // significant complexity for a defense-in-depth measure.
+  const extractionHtml = fullHtml.length > EXTRACT_CHAR_BUDGET
+    ? capAtSafeBoundary(fullHtml, EXTRACT_CHAR_BUDGET)
+    : fullHtml;
+  const truncated = fullHtml.length > EXTRACT_CHAR_BUDGET;
   const extraction = input.extractHtml({
-    html,
+    html: extractionHtml,
     url: input.fetchResult.finalUrl || input.requestedUrl,
     contentType: input.fetchResult.contentType,
   });
@@ -72,7 +88,7 @@ export async function extractTier1FromFetchResult(input: Tier1ExtractInput): Pro
     }],
     contentType: input.fetchResult.contentType,
     title,
-    contentSha256: sha256Hex(html),
+    contentSha256: sha256Hex(fullHtml),
     structured,
     timings: { totalMs: input.durationMs, fetchMs: input.fetchMs ?? input.durationMs },
     errors: [
@@ -80,9 +96,38 @@ export async function extractTier1FromFetchResult(input: Tier1ExtractInput): Pro
       ...(input.fetchResult.truncated
         ? [{ code: "max_bytes", message: "Content truncated at the byte cap" }]
         : []),
+      ...(truncated
+        ? [{ code: "extract_truncated", message: `Extraction input capped at ${EXTRACT_CHAR_BUDGET} chars (REDOS-4)` } as ProvenanceError]
+        : []),
     ],
     ...(input.fetchedAt !== undefined ? { fetchedAt: input.fetchedAt } : {}),
   };
+}
+
+/** Slice HTML at a safe boundary — if the cut lands inside a <script>/<style>/
+ *  <template>/<noscript>/<svg> tag, walk back past the opener so the extractor's
+ *  linear stripElement sees a well-formed (closed or absent) element. */
+function capAtSafeBoundary(html: string, budget: number): string {
+  let cut = budget;
+  const lastOpen = html.lastIndexOf("<", cut);
+  if (lastOpen > cut - 30) {
+    // Avoid cutting mid-tag (e.g. "<scr" at the boundary).
+    cut = lastOpen;
+  }
+  // Check if we're inside a script/style/template/noscript/svg block.
+  const before = html.slice(0, cut);
+  for (const tag of ["script", "style", "template", "noscript", "svg"]) {
+    const openIdx = before.lastIndexOf(`<${tag}`);
+    if (openIdx !== -1) {
+      const closeIdx = before.lastIndexOf(`</${tag}`, cut);
+      if (closeIdx < openIdx) {
+        // Inside an unclosed block — cut before the opener.
+        cut = openIdx;
+        break;
+      }
+    }
+  }
+  return html.slice(0, Math.max(cut, 0));
 }
 
 function hasStructuredFields(structured: StructuredData): boolean {
