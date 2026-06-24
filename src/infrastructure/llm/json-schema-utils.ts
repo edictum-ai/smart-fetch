@@ -44,12 +44,53 @@ export function nonNegativeInteger(
     : invalid(`${path} schema ${key} must be a non-negative integer`);
 }
 
+const MAX_PATTERN_LENGTH = 128;
+
 export function toRegExp(pattern: string, path: string): SchemaValidationResult & { value: RegExp } {
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    return { valid: false, unsupported: true, message: `${path} schema pattern is too long (>${MAX_PATTERN_LENGTH} chars)`, value: /$./ };
+  }
+  if (isLikelyCatastrophicPattern(pattern)) {
+    return { valid: false, unsupported: true, message: `${path} schema pattern may cause catastrophic backtracking`, value: /$./ };
+  }
   try {
     return { valid: true, value: new RegExp(pattern) };
   } catch {
     return { valid: false, message: `${path} schema pattern is invalid`, value: /$./ };
   }
+}
+
+/**
+ * Reject the classic ReDoS shape: a quantified group that itself contains a
+ * quantifier — e.g. (a+)+, (a*)*, (a?)+ — which backtracks exponentially
+ * (TRANSFORM-2/REDOS-5). This is a heuristic (overlapping alternations like
+ * (a|a)+ can also be catastrophic); RE2 is the bulletproof follow-up. Returns
+ * true (unsafe) on a nested-quantifier construct.
+ */
+function isLikelyCatastrophicPattern(pattern: string): boolean {
+  const isQuantifier = (ch: string | undefined): boolean =>
+    ch === "*" || ch === "+" || ch === "?" || ch === "{";
+  const groupHadQuantifier: boolean[] = [];
+  let escaped = false;
+  for (let index = 0; index < pattern.length; index += 1) {
+    const ch = pattern[index];
+    if (escaped) { escaped = false; continue; }
+    if (ch === "\\") { escaped = true; continue; }
+    if (ch === "(") {
+      groupHadQuantifier.push(false);
+    } else if (ch === ")" && groupHadQuantifier.length > 0) {
+      const had = groupHadQuantifier.pop() ?? false;
+      if (had && isQuantifier(pattern[index + 1])) return true;
+      // Propagate: a quantified inner group makes the enclosing group "quantified"
+      // too, so wrapped patterns like ((a+))+ are caught.
+      if (had && groupHadQuantifier.length > 0) {
+        groupHadQuantifier[groupHadQuantifier.length - 1] = true;
+      }
+    } else if (isQuantifier(ch) && groupHadQuantifier.length > 0) {
+      groupHadQuantifier[groupHadQuantifier.length - 1] = true;
+    }
+  }
+  return false;
 }
 
 export function matchesType(value: unknown, type: string): boolean {
