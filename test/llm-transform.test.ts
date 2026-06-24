@@ -41,7 +41,7 @@ test("default summary with configured provider returns transformed provenance", 
   });
   assert.equal(provider.calls.length, 1);
   assert.doesNotMatch(provider.calls[0]?.messages[0]?.content ?? "", /IGNORE ALL/);
-  assert.match(provider.calls[0]?.messages[1]?.content ?? "", /<untrusted_fetched_content>/);
+  assert.match(provider.calls[0]?.messages[1]?.content ?? "", /<untrusted-[A-Za-z0-9_-]+>/);
 });
 
 test("default summary with unconfigured router returns raw fallback provenance", async () => {
