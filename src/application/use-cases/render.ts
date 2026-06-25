@@ -7,11 +7,11 @@ import {
   extractTier1FromFetchResult,
   type HtmlExtractor,
 } from "./tier1-extract.ts";
-import type { NormalizedSmartFetchInput } from "./smart-fetch-input.ts";
+import type { NormalizedCaptatumInput } from "./captatum-input.ts";
 
 export interface MaybeRenderInput {
   result: Result;
-  request: NormalizedSmartFetchInput;
+  request: NormalizedCaptatumInput;
   renderer?: RenderPort;
   fetcher: FetcherPort;
   extractHtml: HtmlExtractor;

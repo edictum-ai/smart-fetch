@@ -9,9 +9,9 @@ import {
   type AuthRuntimeConfig,
 } from "../../application/use-cases/oauth-config.ts";
 import { createRequestAuthorizer } from "../../application/use-cases/request-auth.ts";
-import { createSmartFetchUseCase } from "../../application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../../application/use-cases/captatum.ts";
 import type { HtmlExtractor } from "../../application/use-cases/tier1-extract.ts";
-import { createSmartFetchMcpServer } from "./server.ts";
+import { createCaptatumMcpServer } from "./server.ts";
 
 /**
  * Thrown when the local stdio bridge is asked to run under a non-local flavor.
@@ -49,7 +49,7 @@ export function assertLocalFlavor(runtime: AuthRuntimeConfig): void {
 
 /**
  * Build the same MCP server the hosted `POST /mcp` route serves, but for the
- * self-contained local-binary flavor: identical `smart_fetch` tool (same schema,
+ * self-contained local-binary flavor: identical `captatum` tool (same schema,
  * same core use case, same guarded fetch), single-user local auth, no OAuth
  * secrets, and no network transport. The caller attaches a stdio transport.
  */
@@ -62,15 +62,15 @@ export async function createLocalMcpServer(deps: LocalMcpDeps): Promise<Server> 
     audit: deps.audit,
   });
   const auth = await authorizer.authorize({});
-  const smartFetch = createSmartFetchUseCase({
+  const captatum = createCaptatumUseCase({
     fetcher: deps.fetcher,
     extractHtml: deps.extractHtml,
     transformer: deps.transformer,
     renderer: deps.renderer,
     clock: deps.clock,
   });
-  return createSmartFetchMcpServer({
-    smartFetch,
+  return createCaptatumMcpServer({
+    captatum,
     auth,
     audit: deps.audit,
     clock: deps.clock,

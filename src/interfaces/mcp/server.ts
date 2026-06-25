@@ -9,52 +9,52 @@ import {
 import type { AuditLoggerPort } from "../../application/ports/audit.ts";
 import type { ClockPort } from "../../application/ports/clock.ts";
 import { OAuthError } from "../../application/use-cases/oauth-errors.ts";
-import { requireScope, requiredScopeForSmartFetch } from "../../application/use-cases/oauth-scopes.ts";
+import { requireScope, requiredScopeForCaptatum } from "../../application/use-cases/oauth-scopes.ts";
 import type { RequestAuthResult } from "../../application/use-cases/request-auth.ts";
-import type { SmartFetchUseCase } from "../../application/use-cases/smart-fetch.ts";
+import type { CaptatumUseCase } from "../../application/use-cases/captatum.ts";
 import {
-  normalizeSmartFetchInput,
-  SmartFetchInputError,
-} from "../../application/use-cases/smart-fetch-input.ts";
+  normalizeCaptatumInput,
+  CaptatumInputError,
+} from "../../application/use-cases/captatum-input.ts";
 import type { Result } from "../../domain/result.ts";
 import { resultToMcpText } from "./format.ts";
 import { buildStructuredContent } from "./shape.ts";
-import { SMART_FETCH_TOOL_NAME, smartFetchToolDefinition } from "./schema.ts";
+import { CAPTATUM_TOOL_NAME, captatumToolDefinition } from "./schema.ts";
 
 const AUTH_JSONRPC_CODE = -32001;
 
-export interface SmartFetchMcpServerDeps {
-  smartFetch: Pick<SmartFetchUseCase, "execute">;
+export interface CaptatumMcpServerDeps {
+  captatum: Pick<CaptatumUseCase, "execute">;
   auth: RequestAuthResult;
   audit: AuditLoggerPort;
   clock: ClockPort;
 }
 
-export function createSmartFetchMcpServer(deps: SmartFetchMcpServerDeps): Server {
-  const server = new Server({ name: "smart-fetch", version: "0.1.0" }, {
+export function createCaptatumMcpServer(deps: CaptatumMcpServerDeps): Server {
+  const server = new Server({ name: "captatum", version: "0.1.0" }, {
     capabilities: { tools: { listChanged: false } },
   });
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: [smartFetchToolDefinition],
+    tools: [captatumToolDefinition],
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
-    if (request.params.name !== SMART_FETCH_TOOL_NAME) {
+    if (request.params.name !== CAPTATUM_TOOL_NAME) {
       throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`);
     }
-    return await callSmartFetch(request.params.arguments, deps);
+    return await callCaptatum(request.params.arguments, deps);
   });
 
   return server;
 }
 
-async function callSmartFetch(args: unknown, deps: SmartFetchMcpServerDeps): Promise<CallToolResult> {
+async function callCaptatum(args: unknown, deps: CaptatumMcpServerDeps): Promise<CallToolResult> {
   const started = deps.clock.nowMs();
   try {
-    const normalized = normalizeSmartFetchInput(args);
-    requireScope(deps.auth, requiredScopeForSmartFetch(args));
-    const result = await deps.smartFetch.execute(args, { fetchedAt: new Date(deps.clock.nowMs()).toISOString() });
+    const normalized = normalizeCaptatumInput(args);
+    requireScope(deps.auth, requiredScopeForCaptatum(args));
+    const result = await deps.captatum.execute(args, { fetchedAt: new Date(deps.clock.nowMs()).toISOString() });
     // AUDIT-1: audit write in its own try/catch — a rejecting sink must never
     // convert a successful fetch into a client error.
     try {
@@ -77,19 +77,19 @@ function toMcpError(error: unknown): McpError {
   if (error instanceof OAuthError) {
     return new McpError(AUTH_JSONRPC_CODE, `${error.code}: ${error.message}`);
   }
-  if (error instanceof SmartFetchInputError) {
+  if (error instanceof CaptatumInputError) {
     const { code, message } = error.body.error;
     return new McpError(ErrorCode.InvalidParams, `${code}: ${message}`);
   }
-  return new McpError(ErrorCode.InternalError, "smart_fetch failed");
+  return new McpError(ErrorCode.InternalError, "captatum failed");
 }
 
-async function auditResult(deps: SmartFetchMcpServerDeps, result: Result): Promise<void> {
+async function auditResult(deps: CaptatumMcpServerDeps, result: Result): Promise<void> {
   await deps.audit.writeToolEvent({
     occurredAt: new Date(deps.clock.nowMs()).toISOString(),
     subject: deps.auth.subject,
     clientId: deps.auth.clientId,
-    tool: SMART_FETCH_TOOL_NAME,
+    tool: CAPTATUM_TOOL_NAME,
     url_host: urlHost(result.finalUrl),
     tier: result.tier,
     platform: result.platform.adapterId,
@@ -106,7 +106,7 @@ async function auditResult(deps: SmartFetchMcpServerDeps, result: Result): Promi
 }
 
 async function auditFailure(
-  deps: SmartFetchMcpServerDeps,
+  deps: CaptatumMcpServerDeps,
   args: unknown,
   started: number,
   error: unknown,
@@ -115,7 +115,7 @@ async function auditFailure(
     occurredAt: new Date(deps.clock.nowMs()).toISOString(),
     subject: deps.auth.subject,
     clientId: deps.auth.clientId,
-    tool: SMART_FETCH_TOOL_NAME,
+    tool: CAPTATUM_TOOL_NAME,
     url_host: inputUrlHost(args),
     tier: "error",
     output: inputOutput(args),

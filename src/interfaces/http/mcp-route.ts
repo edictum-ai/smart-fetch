@@ -3,13 +3,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AuditLoggerPort } from "../../application/ports/audit.ts";
 import type { ClockPort } from "../../application/ports/clock.ts";
 import type { RequestAuthorizer } from "../../application/use-cases/request-auth.ts";
-import type { SmartFetchUseCase } from "../../application/use-cases/smart-fetch.ts";
+import type { CaptatumUseCase } from "../../application/use-cases/captatum.ts";
 import { config } from "../../config.ts";
-import { createSmartFetchMcpServer } from "../mcp/server.ts";
+import { createCaptatumMcpServer } from "../mcp/server.ts";
 import { sendMcpAuthError } from "./errors.ts";
 
 export interface McpRouteDeps {
-  smartFetch: Pick<SmartFetchUseCase, "execute">;
+  captatum: Pick<CaptatumUseCase, "execute">;
   authorizer: Pick<RequestAuthorizer, "authorize">;
   audit: AuditLoggerPort;
   clock: ClockPort;
@@ -26,7 +26,7 @@ export async function registerMcpRoute(app: FastifyInstance, deps: McpRouteDeps)
 }
 
 /**
- * Process-wide admission limiter bounding concurrent smart_fetch EXECUTIONS
+ * Process-wide admission limiter bounding concurrent captatum EXECUTIONS
  * (DOS-2). Sized for the hosted task (2 vCPU / 4 GiB): each in-flight
  * fetch/render/transform holds a socket + bounded memory, so 8 concurrent keeps
  * headroom without letting one tenant starve the rest. Over-cap calls throw
@@ -73,12 +73,12 @@ async function handleMcpPost(
     allowedHosts: deps.allowedHosts,
     allowedOrigins: deps.allowedOrigins,
   });
-  // DOS-2: cap concurrent smart_fetch EXECUTIONS (not POSTs) — a JSON-RPC batch
+  // DOS-2: cap concurrent captatum EXECUTIONS (not POSTs) — a JSON-RPC batch
   // is one POST but dispatches many tools/call, so the limiter must wrap each
   // execute. An over-cap call throws "overloaded" (surfaced to the client as a
   // tool error; it retries) rather than bypassing the cap.
-  const mcp = createSmartFetchMcpServer({
-    smartFetch: withAdmission(deps.smartFetch, mcpAdmission),
+  const mcp = createCaptatumMcpServer({
+    captatum: withAdmission(deps.captatum, mcpAdmission),
     auth,
     audit: deps.audit,
     clock: deps.clock,
@@ -94,15 +94,15 @@ async function handleMcpPost(
   }
 }
 
-/** Wraps a SmartFetchUseCase so each `execute()` acquires/releases an admission slot. */
+/** Wraps a CaptatumUseCase so each `execute()` acquires/releases an admission slot. */
 function withAdmission(
-  inner: Pick<SmartFetchUseCase, "execute">,
+  inner: Pick<CaptatumUseCase, "execute">,
   limiter: AdmissionLimiter,
-): Pick<SmartFetchUseCase, "execute"> {
+): Pick<CaptatumUseCase, "execute"> {
   return {
-    execute: async (...args: Parameters<SmartFetchUseCase["execute"]>) => {
+    execute: async (...args: Parameters<CaptatumUseCase["execute"]>) => {
       if (!limiter.tryAcquire()) {
-        throw new Error("captatum: server overloaded — too many concurrent smart_fetch calls");
+        throw new Error("captatum: server overloaded — too many concurrent captatum calls");
       }
       try {
         return await inner.execute(...args);

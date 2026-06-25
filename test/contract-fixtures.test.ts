@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import type { FetcherOptions, FetcherPort, FetcherResult, RejectResult } from "../src/application/ports/fetcher.ts";
 import type { ClockPort } from "../src/application/ports/clock.ts";
-import { createSmartFetchUseCase } from "../src/application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../src/application/use-cases/captatum.ts";
 import { extractHtml } from "../src/infrastructure/extract/index.ts";
 import { resultToMcpText } from "../src/interfaces/mcp/format.ts";
 
@@ -13,9 +13,9 @@ const PAGE_DIR = join(FIXTURE_DIR, "pages");
 const FIXTURES = ["raw-safe", "summary-fallback", "blocked-ssrf", "render-disabled"] as const;
 
 for (const name of FIXTURES) {
-  test(`contract fixture ${name} matches current smart_fetch output`, async () => {
+  test(`contract fixture ${name} matches current captatum output`, async () => {
     const fixture = loadFixture(name);
-    const useCase = createSmartFetchUseCase({
+    const useCase = createCaptatumUseCase({
       fetcher: new ContractFixtureFetcher(),
       extractHtml,
       clock: fixedClock(),

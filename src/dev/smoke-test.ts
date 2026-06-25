@@ -9,7 +9,7 @@ import type { StorePort } from "../application/ports/store.ts";
 import type { TransformInput, TransformPort, TransformResult } from "../application/ports/transformer.ts";
 import type { HostedOAuthConfig } from "../application/use-cases/oauth-config.ts";
 import { signAccessToken } from "../application/use-cases/oauth-crypto.ts";
-import { createSmartFetchUseCase } from "../application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../application/use-cases/captatum.ts";
 import { config } from "../config.ts";
 import type { Result } from "../domain/result.ts";
 import { extractHtml } from "../infrastructure/extract/index.ts";
@@ -19,7 +19,7 @@ import { resultToMcpText } from "../interfaces/mcp/format.ts";
 const SAFE_URL = "https://smoke.test/fixture";
 const BLOCKED_URL = "http://169.254.169.254/latest/meta-data";
 const SPA_URL = "https://smoke.test/spa";
-const FIXTURE_TEXT = "smart-fetch shared smoke fixture content.";
+const FIXTURE_TEXT = "captatum shared smoke fixture content.";
 const clock: ClockPort = { nowMs: () => Date.parse("2026-06-16T12:00:00.000Z") };
 
 class SmokeFetcher implements FetcherPort {
@@ -65,16 +65,16 @@ class SmokeStore implements StorePort {
 const oauth = hostedConfig();
 const fetcher = new SmokeFetcher();
 const transformer = new SmokeTransformer();
-const smartFetch = createSmartFetchUseCase({ fetcher, extractHtml, transformer, clock });
+const captatum = createCaptatumUseCase({ fetcher, extractHtml, transformer, clock });
 
-printResult("raw safe fetch", await smartFetch.execute({ url: SAFE_URL, output: "raw" }));
-printResult("default summary with configured fake provider", await smartFetch.execute({ url: SAFE_URL }));
-printResult("blocked SSRF URL", await smartFetch.execute({ url: BLOCKED_URL, output: "raw" }));
-printResult("render-disabled default behavior", await smartFetch.execute({ url: SPA_URL, output: "raw" }));
+printResult("raw safe fetch", await captatum.execute({ url: SAFE_URL, output: "raw" }));
+printResult("default summary with configured fake provider", await captatum.execute({ url: SAFE_URL }));
+printResult("blocked SSRF URL", await captatum.execute({ url: BLOCKED_URL, output: "raw" }));
+printResult("render-disabled default behavior", await captatum.execute({ url: SPA_URL, output: "raw" }));
 
 const port = await freePort();
 const app = await createHttpApp({
-  smartFetch,
+  captatum,
   runtime: { flavor: "hosted", oauth },
   clock,
   audit: new SmokeAudit(),
@@ -101,7 +101,7 @@ const hosted = await fetch(`http://127.0.0.1:${port}${config.mcp.endpointPath}`,
     jsonrpc: "2.0",
     id: 1,
     method: "tools/call",
-    params: { name: "smart_fetch", arguments: { url: SAFE_URL, output: "raw" } },
+    params: { name: "captatum", arguments: { url: SAFE_URL, output: "raw" } },
   }),
 });
 const hostedResponseText = await hosted.text();

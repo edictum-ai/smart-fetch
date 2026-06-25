@@ -7,7 +7,7 @@ any `pnpm install` / image build / deploy. All must clear `minimumReleaseAge:
 after install.
 
 This ledger mirrors the table format of
-`personal-memory-gateway/docs/dependency-ledger.md`. smart-fetch is a networked
+`personal-memory-gateway/docs/dependency-ledger.md`. captatum is a networked
 service (URL fetcher + headless render), so every direct runtime dependency is
 justified here.
 
@@ -65,7 +65,7 @@ change needs an npm package for packaging, it must be added here and clear the
 | `mysql2` | `3.22.3` | `2026-04-27T02:16:51.908Z` | `2026-06-15` | https://www.npmjs.com/package/mysql2/v/3.22.3 | TiDB-compatible driver for the OAuth-state store in the hosted flavor (reuses personal-memory-infra TiDB). |
 | `wreq-js` | `2.3.1` | `2026-05-20T09:13:40.492Z` | `2026-06-15` | https://www.npmjs.com/package/wreq-js/v/2.3.1 | Tier-1 fetch: Rust-powered browser TLS/JA3+JA4 fingerprint impersonation for anti-bot bypass. The one hard ingredient; `fetch()`-compatible with native prebuilts, MIT. |
 | `playwright` | `1.60.0` | `2026-05-11T19:09:33.114Z` | `2026-06-16` | https://www.npmjs.com/package/playwright/v/1.60.0 | Tier-3 render adapter, loaded only by lazy `import("playwright")` when `allowRender: true` and shell-gate requires it. Latest `1.61.0` was checked and rejected as too new (`2026-06-15T10:06:22.269Z`). Audit result: failed because of pre-existing `hono` via `@modelcontextprotocol/sdk`; see P9 audit result below. |
-| `zod` | `4.4.3` | `2026-05-04T07:06:40.819Z` | `2026-06-15` | https://www.npmjs.com/package/zod/v/4.4.3 | Tool I/O schemas (smart_fetch params, extract schema, provenance). |
+| `zod` | `4.4.3` | `2026-05-04T07:06:40.819Z` | `2026-06-15` | https://www.npmjs.com/package/zod/v/4.4.3 | Tool I/O schemas (captatum params, extract schema, provenance). |
 | `typescript` | `6.0.3` (exact pin) | `2026-04-16T23:38:27.905Z` | `2026-06-15` | https://www.npmjs.com/package/typescript/v/6.0.3 | Dev typecheck (`tsc --noEmit`). 6.0.3 required for `target: ES2023` + `allowImportingTsExtensions` (matches personal-memory-gateway / spec-reviewer). |
 | `@types/node` | `24.12.4` (exact pin) | `2026-05-11T22:25:29.000Z` | `2026-06-15` | https://www.npmjs.com/package/@types/node/v/24.12.4 | Dev Node 24 typings. Pinned exact to avoid floating to `24.13.x` (published 2026-06-04/05/10, past the 15-day cutoff). |
 
@@ -100,8 +100,8 @@ recheck) and newer pre-releases. Every selected pin clears the 15-day gate.
 Install command:
 
 ```bash
-PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 COREPACK_HOME=/private/tmp/smart-fetch-corepack \
-  PNPM_HOME=/private/tmp/smart-fetch-pnpm corepack pnpm add playwright@1.60.0 --save-exact
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 COREPACK_HOME=/private/tmp/captatum-corepack \
+  PNPM_HOME=/private/tmp/captatum-pnpm corepack pnpm add playwright@1.60.0 --save-exact
 ```
 
 Result: install succeeded with `playwright@1.60.0`; browser binaries were not
@@ -110,7 +110,7 @@ downloaded during dependency install.
 Audit command:
 
 ```bash
-COREPACK_HOME=/private/tmp/smart-fetch-corepack PNPM_HOME=/private/tmp/smart-fetch-pnpm \
+COREPACK_HOME=/private/tmp/captatum-corepack PNPM_HOME=/private/tmp/captatum-pnpm \
   corepack pnpm audit --prod
 ```
 

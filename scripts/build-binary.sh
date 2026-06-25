@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compile the self-contained local-binary flavor of smart-fetch.
+# Compile the self-contained local-binary flavor of captatum.
 #
 # The local flavor is the stdio MCP bridge (src/interfaces/mcp/stdio-bridge.ts)
 # compiled into one executable with `bun build --compile`. Bun is an EXTERNAL
@@ -21,7 +21,7 @@
 set -uo pipefail
 
 ENTRY="src/interfaces/mcp/stdio-bridge.ts"
-OUT="dist/smart-fetch"
+OUT="dist/captatum"
 # Tier-3 render deps are lazy/optional; keep them external so the compile reaches
 # the real self-containment check rather than a spurious bundler resolve error.
 EXTERNALS=(--external playwright --external playwright-core --external chromium-bidi)

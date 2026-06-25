@@ -5,11 +5,11 @@
   },
   "structuredContent": {
     "url": "https://fixture.test/contract",
-    "bytes": 444,
+    "bytes": 441,
     "code": 200,
     "codeText": "OK",
     "durationMs": 0,
-    "result": "Contract Fixture Smart fetch fixture body for contract reconciliation.",
+    "result": "Contract Fixture Captatum fixture body for contract reconciliation.",
     "schemaVersion": 1,
     "finalUrl": "https://fixture.test/contract",
     "redirects": [],
@@ -29,13 +29,13 @@
         "outcome": "ok",
         "status": 200,
         "durationMs": 0,
-        "bytes": 444,
+        "bytes": 441,
         "reason": "content-present"
       }
     ],
     "contentType": "text/html; charset=utf-8",
     "title": "Contract Fixture",
-    "contentSha256": "1358e82ff768545063d9701b5e1563af59c56868b4bd66de270d12887bc1bb3c",
+    "contentSha256": "6c4c835451febdd3b8314e30baaa593932cbb6512d4bec3c308327b6d0f4d4fe",
     "structured": {
       "canonicalUrl": "https://fixture.test/contract",
       "og": {
@@ -51,11 +51,11 @@
       "transformMs": 0
     },
     "errors": [],
-    "provenanceHash": "20491d8d7e9f4797f3351a47fba1f5ef90fe6559244f1cce47e3891ebd22f44a",
+    "provenanceHash": "879e33bfe764ea07f9bce10897b3804252204c52c170a6091867f966dd5a9ac4",
     "transform": {
       "provider": "none",
       "reason": "unconfigured"
     }
   },
-  "mcpText": "<!-- captatum tier=1 output=raw status=200 bytes=444 finalUrl=https://fixture.test/contract platform=generic jsRequired=false resolvedVia=tier1-meta -->\nContract Fixture Smart fetch fixture body for contract reconciliation."
+  "mcpText": "<!-- captatum tier=1 output=raw status=200 bytes=441 finalUrl=https://fixture.test/contract platform=generic jsRequired=false resolvedVia=tier1-meta -->\nContract Fixture Captatum fixture body for contract reconciliation."
 }

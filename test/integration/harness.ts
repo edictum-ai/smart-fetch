@@ -1,5 +1,5 @@
 /**
- * Integration harness: drives the REAL smart-fetch pipeline (real wreq-js
+ * Integration harness: drives the REAL captatum pipeline (real wreq-js
  * guarded fetcher, real Tier-1 extractor, real Playwright renderer, real
  * OpenRouter/Ollama transformer) in-process against real URLs.
  *
@@ -10,7 +10,7 @@
  * (via config). The harness never reads or writes keys itself — set them in the
  * environment when invoking the live suite.
  */
-import { createSmartFetchUseCase } from "../../src/application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../../src/application/use-cases/captatum.ts";
 import { extractHtml } from "../../src/infrastructure/extract/index.ts";
 import { createDefaultLlmTransformer } from "../../src/infrastructure/llm/model-router.ts";
 import { PlaywrightRenderer } from "../../src/infrastructure/render/index.ts";
@@ -20,7 +20,7 @@ import type { Result } from "../../src/domain/result.ts";
 const clock = { nowMs: (): number => Date.now() };
 
 export function isLive(): boolean {
-  return process.env.LIVE === "1" || process.env.SMART_FETCH_LIVE === "1";
+  return process.env.LIVE === "1" || process.env.CAPTATUM_LIVE === "1";
 }
 
 export function hasOpenRouterKey(): boolean {
@@ -34,7 +34,7 @@ export interface BuildOpts {
 
 /** Build a real use-case. Defaults to full pipeline; pass false to omit a stage. */
 export async function buildUseCase(opts: BuildOpts = {}) {
-  return createSmartFetchUseCase({
+  return createCaptatumUseCase({
     fetcher: createWreqGuardedFetcher(),
     extractHtml,
     transformer: opts.withTransformer === false ? undefined : await createDefaultLlmTransformer(),
@@ -43,10 +43,10 @@ export async function buildUseCase(opts: BuildOpts = {}) {
   });
 }
 
-export type SmartFetchInput = Record<string, unknown>;
+export type CaptatumInput = Record<string, unknown>;
 
-/** Run smart_fetch against a real URL through the full real pipeline. */
-export async function run(url: string, input: SmartFetchInput = {}): Promise<Result> {
+/** Run captatum against a real URL through the full real pipeline. */
+export async function run(url: string, input: CaptatumInput = {}): Promise<Result> {
   const useCase = await buildUseCase();
   return useCase.execute({ url, ...input });
 }
@@ -55,7 +55,7 @@ export async function run(url: string, input: SmartFetchInput = {}): Promise<Res
  * WebFetch-equivalent baseline: a plain fetch + strip <script>/<style> + tags.
  * Mimics what WebFetch does to HTML before summarizing — crucially it DROPS the
  * <script application/ld+json> blocks, which is exactly the content WebFetch
- * loses on SSR pages like Ashby. Used to prove smart-fetch's advantage.
+ * loses on SSR pages like Ashby. Used to prove captatum's advantage.
  */
 export async function webfetchBaseline(url: string): Promise<string> {
   const res = await fetch(url, {

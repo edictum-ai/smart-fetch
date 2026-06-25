@@ -7,9 +7,9 @@ import type { OAuthScope } from "./oauth-scopes.ts";
 import { scopeString } from "./oauth-scopes.ts";
 import { OAuthError } from "./oauth-errors.ts";
 
-const CONSENT_AUDIENCE = "smart-fetch/oauth-consent";
-const CODE_PREFIX = "sfac";
-const REFRESH_PREFIX = "sfrt";
+const CONSENT_AUDIENCE = "captatum/oauth-consent";
+const CODE_PREFIX = "ctac";
+const REFRESH_PREFIX = "ctrt";
 
 export interface ConsentRequestClaims {
   clientId: string;
@@ -81,7 +81,7 @@ export async function signConsentToken(
 ): Promise<string> {
   const now = nowSeconds(clock);
   return await new SignJWT({
-    typ: "smart-fetch-consent",
+    typ: "captatum-consent",
     client_id: claims.clientId,
     redirect_uri: claims.redirectUri,
     resource: claims.resource,
@@ -172,7 +172,7 @@ function keyId(config: HostedOAuthConfig): string | undefined {
 
 function consentClaims(payload: JWTPayload): ConsentRequestClaims {
   const scopes = typeof payload.scope === "string" ? payload.scope.split(/\s+/) : [];
-  if (payload.typ !== "smart-fetch-consent") throw new Error("wrong token type");
+  if (payload.typ !== "captatum-consent") throw new Error("wrong token type");
   return {
     clientId: requiredString(payload.client_id, "client_id"),
     redirectUri: requiredString(payload.redirect_uri, "redirect_uri"),

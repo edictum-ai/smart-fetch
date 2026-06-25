@@ -25,7 +25,7 @@ export interface ToolAuditEvent {
   occurredAt: string;
   subject?: string;
   clientId?: string;
-  tool: "smart_fetch";
+  tool: "captatum";
   url_host?: string;
   tier?: string | number;
   platform?: string;

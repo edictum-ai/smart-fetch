@@ -64,7 +64,7 @@ export interface Result {
   codeText: string;
   durationMs: number;
   result: string;
-  // smart-fetch provenance
+  // captatum provenance
   schemaVersion: 1;
   finalUrl: string;
   redirects: Redirect[];

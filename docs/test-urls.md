@@ -1,4 +1,4 @@
-# smart-fetch Test URL Suite
+# captatum Test URL Suite
 
 Run these against the pipeline to verify behavior. Update status after each fix.
 
@@ -102,9 +102,9 @@ degrades to `output: raw` with `transform.provider: "none"`.
 
 ```bash
 # Via curl (direct endpoint, needs a bearer token on the hosted flavor)
-curl -s -X POST https://smart-fetch.arnoldcartagena.com/mcp \
+curl -s -X POST https://captatum.arnoldcartagena.com/mcp \
   -H "content-type: application/json" \
   -H "Authorization: Bearer <token>" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"smart_fetch","arguments":{"url":"<test-url>","output":"raw"}}}' \
+  -d '{"jsonrpc":"2.0","method":"tools/call","id":1,"params":{"name":"captatum","arguments":{"url":"<test-url>","output":"raw"}}}' \
   | python3 -m json.tool
 ```

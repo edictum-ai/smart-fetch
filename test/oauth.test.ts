@@ -15,7 +15,7 @@ import type {
 import { loadAuthRuntimeConfig } from "../src/application/use-cases/oauth-config.ts";
 import type { HostedOAuthConfig } from "../src/application/use-cases/oauth-config.ts";
 import { pkceChallenge, sha256Hex, verifyAccessToken } from "../src/application/use-cases/oauth-crypto.ts";
-import { requireScope, requiredScopeForSmartFetch } from "../src/application/use-cases/oauth-scopes.ts";
+import { requireScope, requiredScopeForCaptatum } from "../src/application/use-cases/oauth-scopes.ts";
 import { createRequestAuthorizer } from "../src/application/use-cases/request-auth.ts";
 import { registerOAuthRoutes } from "../src/interfaces/http/oauth-routes.ts";
 
@@ -42,7 +42,7 @@ test("PKCE S256 authorize/approve/token flow issues ES256 access token and hashe
   assert.equal(body.expires_in, 600);
   assert.equal(body.scope, "fetch:read fetch:transform");
   assert.match(body.access_token, /^[^.]+\.[^.]+\.[^.]+$/);
-  assert.match(body.refresh_token, /^sfrt\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+  assert.match(body.refresh_token, /^ctrt\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
 
   const verified = await verifyAccessToken(body.access_token, ctx.config, ctx.clock);
   assert.equal(verified.subject, "hosted-user");
@@ -199,14 +199,14 @@ test("refresh with a mismatched client_id is rejected and revokes the family (RF
 test("hosted production requires secrets while local binary auth bypass needs none", async () => {
   assert.throws(
     () => loadAuthRuntimeConfig({
-      SMART_FETCH_FLAVOR: "hosted",
+      CAPTATUM_FLAVOR: "hosted",
       NODE_ENV: "production",
-      OAUTH_ISSUER: "https://smart-fetch.test",
-      OAUTH_RESOURCE: "https://smart-fetch.test/mcp",
+      OAUTH_ISSUER: "https://captatum.test",
+      OAUTH_RESOURCE: "https://captatum.test/mcp",
     }),
     /OAUTH_CONSENT_SIGNING_SECRET and OAUTH_SIGNING_PRIVATE_JWK/,
   );
-  assert.deepEqual(loadAuthRuntimeConfig({ SMART_FETCH_FLAVOR: "local-binary", NODE_ENV: "production" }), {
+  assert.deepEqual(loadAuthRuntimeConfig({ CAPTATUM_FLAVOR: "local-binary", NODE_ENV: "production" }), {
     flavor: "local-binary",
   });
 
@@ -221,9 +221,9 @@ test("hosted production requires secrets while local binary auth bypass needs no
 });
 
 test("scope helpers enforce read versus transform", () => {
-  assert.equal(requiredScopeForSmartFetch({ output: "raw" }), "fetch:read");
-  assert.equal(requiredScopeForSmartFetch({ output: "summary" }), "fetch:transform");
-  assert.equal(requiredScopeForSmartFetch({}), "fetch:transform");
+  assert.equal(requiredScopeForCaptatum({ output: "raw" }), "fetch:read");
+  assert.equal(requiredScopeForCaptatum({ output: "summary" }), "fetch:transform");
+  assert.equal(requiredScopeForCaptatum({}), "fetch:transform");
   assert.throws(
     () => requireScope({ subject: "s", clientId: "c", scopes: ["fetch:read"] }, "fetch:transform"),
     /Missing required scope: fetch:transform/,
@@ -256,7 +256,7 @@ async function approveCode(ctx: TestContext, verifier: string, scope: string): P
   });
   assert.equal(authorize.statusCode, 200);
   const cookie = firstCookie(authorize.headers["set-cookie"]);
-  assert.match(cookie, /^smart_fetch_consent=/);
+  assert.match(cookie, /^captatum_consent=/);
 
   const approve = await ctx.app.inject({
     method: "POST",
@@ -298,8 +298,8 @@ async function postForm(ctx: TestContext, url: string, body: Record<string, stri
 
 function hostedConfig(): HostedOAuthConfig {
   return {
-    issuer: "https://smart-fetch.test",
-    resource: "https://smart-fetch.test/mcp",
+    issuer: "https://captatum.test",
+    resource: "https://captatum.test/mcp",
     consentSigningSecret: "test-consent-secret-with-enough-entropy",
     signingPrivateJwk: testPrivateJwk(),
     signingKeyId: "test-key-1",

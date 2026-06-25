@@ -14,11 +14,11 @@ import { resolveAshbyEmbedUrl } from "../../infrastructure/ashby/embed-resolver.
 import { fallbackExcerpt } from "./result-excerpt.ts";
 import { transformContent } from "./transform-content.ts";
 import {
-  DEFAULT_SMART_FETCH_DEFAULTS,
-  normalizeSmartFetchInput,
-  type NormalizedSmartFetchInput,
-  type SmartFetchDefaults,
-} from "./smart-fetch-input.ts";
+  DEFAULT_CAPTATUM_DEFAULTS,
+  normalizeCaptatumInput,
+  type NormalizedCaptatumInput,
+  type CaptatumDefaults,
+} from "./captatum-input.ts";
 
 const GENERIC_PLATFORM: Platform = {
   adapterId: "generic",
@@ -26,38 +26,38 @@ const GENERIC_PLATFORM: Platform = {
   detectedFrom: "tier1",
 };
 
-export interface SmartFetchContext {
+export interface CaptatumContext {
   fetchedAt?: string;
 }
 
-export interface SmartFetchDeps {
+export interface CaptatumDeps {
   fetcher: FetcherPort;
   extractHtml: HtmlExtractor;
   clock: ClockPort;
   transformer?: TransformPort;
   renderer?: RenderPort;
-  defaults?: Partial<SmartFetchDefaults>;
+  defaults?: Partial<CaptatumDefaults>;
 }
 
-export class SmartFetchUseCase {
+export class CaptatumUseCase {
   private readonly fetcher: FetcherPort;
   private readonly extractHtml: HtmlExtractor;
   private readonly clock: ClockPort;
   private readonly transformer?: TransformPort;
   private readonly renderer?: RenderPort;
-  private readonly defaults: SmartFetchDefaults;
+  private readonly defaults: CaptatumDefaults;
 
-  constructor(deps: SmartFetchDeps) {
+  constructor(deps: CaptatumDeps) {
     this.fetcher = deps.fetcher;
     this.extractHtml = deps.extractHtml;
     this.clock = deps.clock;
     this.transformer = deps.transformer;
     this.renderer = deps.renderer;
-    this.defaults = { ...DEFAULT_SMART_FETCH_DEFAULTS, ...deps.defaults };
+    this.defaults = { ...DEFAULT_CAPTATUM_DEFAULTS, ...deps.defaults };
   }
 
-  async execute(input: unknown, context: SmartFetchContext = {}): Promise<Result> {
-    const request = normalizeSmartFetchInput(input, this.defaults);
+  async execute(input: unknown, context: CaptatumContext = {}): Promise<Result> {
+    const request = normalizeCaptatumInput(input, this.defaults);
     const startMs = this.clock.nowMs();
     const fetchStartMs = startMs;
     // Tier-2: resolve Ashby-embed careers pages (e2b.dev/careers?ashby_jid=…)
@@ -110,7 +110,7 @@ export class SmartFetchUseCase {
 
   private async applyOutputMode(
     base: Result,
-    request: NormalizedSmartFetchInput,
+    request: NormalizedCaptatumInput,
     startMs: number,
     fetchMs: number,
   ): Promise<Result> {
@@ -177,12 +177,12 @@ export class SmartFetchUseCase {
   }
 }
 
-export function createSmartFetchUseCase(deps: SmartFetchDeps): SmartFetchUseCase {
-  return new SmartFetchUseCase(deps);
+export function createCaptatumUseCase(deps: CaptatumDeps): CaptatumUseCase {
+  return new CaptatumUseCase(deps);
 }
 
 function rejectResult(
-  request: NormalizedSmartFetchInput,
+  request: NormalizedCaptatumInput,
   rejected: RejectResult,
   fetchMs: number,
   totalMs: number,

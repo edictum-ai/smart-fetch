@@ -8,13 +8,13 @@
  *
  * Hits the public network. Exits non-zero if any assertion fails.
  */
-import { createSmartFetchUseCase } from "../application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../application/use-cases/captatum.ts";
 import { extractHtml } from "../infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "../infrastructure/wreq/requester.ts";
 import { createRenderer } from "../infrastructure/render/index.ts";
 
 const clock = { nowMs: () => Date.now() };
-const smartFetch = createSmartFetchUseCase({
+const captatum = createCaptatumUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
   renderer: createRenderer(),
@@ -82,7 +82,7 @@ for (const c of cases) {
   const startedAt = Date.now();
   let result;
   try {
-    result = await smartFetch.execute({
+    result = await captatum.execute({
       url: c.url,
       output: "raw",
       allowRender: c.allowRender,

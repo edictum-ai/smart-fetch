@@ -4,14 +4,14 @@ import type { ClockPort } from "../../application/ports/clock.ts";
 import type { StorePort } from "../../application/ports/store.ts";
 import type { AuthRuntimeConfig } from "../../application/use-cases/oauth-config.ts";
 import { createRequestAuthorizer } from "../../application/use-cases/request-auth.ts";
-import type { SmartFetchUseCase } from "../../application/use-cases/smart-fetch.ts";
+import type { CaptatumUseCase } from "../../application/use-cases/captatum.ts";
 import { config } from "../../config.ts";
 import { registerOAuthRoutes } from "./oauth-routes.ts";
 import { registerMcpRoute } from "./mcp-route.ts";
 import { sendHttpError } from "./errors.ts";
 
 export interface HttpAppDeps {
-  smartFetch: Pick<SmartFetchUseCase, "execute">;
+  captatum: Pick<CaptatumUseCase, "execute">;
   runtime: AuthRuntimeConfig;
   clock: ClockPort;
   audit: AuditLoggerPort;
@@ -67,7 +67,7 @@ export async function createHttpApp(deps: HttpAppDeps): Promise<FastifyInstance>
   }
 
   await registerMcpRoute(app, {
-    smartFetch: deps.smartFetch,
+    captatum: deps.captatum,
     authorizer: createRequestAuthorizer({ runtime: deps.runtime, clock: deps.clock, audit: deps.audit }),
     audit: deps.audit,
     clock: deps.clock,

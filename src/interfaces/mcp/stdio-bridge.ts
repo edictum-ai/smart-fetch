@@ -13,7 +13,7 @@ import { createWreqGuardedFetcher } from "../../infrastructure/wreq/requester.ts
 import { createLocalMcpServer, type LocalMcpDeps } from "./local-server.ts";
 
 /**
- * Self-contained local-binary entrypoint: serves the same `smart_fetch` engine
+ * Self-contained local-binary entrypoint: serves the same `captatum` engine
  * over a stdio MCP transport. No OAuth, no HTTP listener, single-user/single-agent.
  * stdout is reserved for JSON-RPC framing, so every log line goes to stderr.
  */
@@ -49,7 +49,7 @@ async function startStdioBridge(): Promise<Server> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write(
-    "smart-fetch local stdio bridge ready: single-user, no OAuth, no network listener.\n",
+    "captatum local stdio bridge ready: single-user, no OAuth, no network listener.\n",
   );
   const close = (): void => void server.close();
   process.once("SIGINT", close);

@@ -9,13 +9,13 @@ import type { StorePort } from "../src/application/ports/store.ts";
 import type { TransformInput, TransformPort, TransformResult } from "../src/application/ports/transformer.ts";
 import type { AuthRuntimeConfig, HostedOAuthConfig } from "../src/application/use-cases/oauth-config.ts";
 import { signAccessToken } from "../src/application/use-cases/oauth-crypto.ts";
-import { createSmartFetchUseCase } from "../src/application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../src/application/use-cases/captatum.ts";
 import { config } from "../src/config.ts";
 import { extractHtml } from "../src/infrastructure/extract/index.ts";
 import { assertHostedFlavor, createHttpApp, HostedFlavorError } from "../src/interfaces/http/app.ts";
 
 const NOW_MS = Date.parse("2026-06-16T12:00:00.000Z");
-const HOST = "smart-fetch.test";
+const HOST = "captatum.test";
 const ORIGIN = "https://client.test";
 
 test("HTTP MCP listener refuses local-binary instead of exposing an unauthenticated /mcp", async () => {
@@ -25,7 +25,7 @@ test("HTTP MCP listener refuses local-binary instead of exposing an unauthentica
   );
   await assert.rejects(
     createHttpApp({
-      smartFetch: createSmartFetchUseCase({
+      captatum: createCaptatumUseCase({
         fetcher: new FakeFetcher("<main>Body</main>"),
         extractHtml,
         clock: new FakeClock(NOW_MS),
@@ -40,7 +40,7 @@ test("HTTP MCP listener refuses local-binary instead of exposing an unauthentica
   );
 });
 
-test("POST /mcp rejects unauthenticated hosted calls before smart_fetch runs", async () => {
+test("POST /mcp rejects unauthenticated hosted calls before captatum runs", async () => {
   const ctx = await setup();
   const response = await ctx.rpc({ arguments: { url: "https://fixture.test/", output: "raw" } }, undefined);
 
@@ -98,13 +98,13 @@ test("invalid tool input returns validation error before outbound fetch", async 
   await ctx.app.close();
 });
 
-test("tools/list advertises a strict smart_fetch input schema", async () => {
+test("tools/list advertises a strict captatum input schema", async () => {
   const ctx = await setup();
   const response = await ctx.rpc({ method: "tools/list", params: {} }, ["fetch:read"]);
 
   assert.equal(response.statusCode, 200, response.body);
   const body = response.json() as ToolsListSuccess;
-  const tool = body.result.tools.find((item) => item.name === "smart_fetch");
+  const tool = body.result.tools.find((item) => item.name === "captatum");
   assert.ok(tool);
   assert.equal(tool.inputSchema.additionalProperties, false);
   assert.ok(tool.description.includes("Default output is summary"));
@@ -143,7 +143,7 @@ async function setup(options: { transformer?: TransformPort } = {}) {
   const fetcher = new FakeFetcher("<main>Fixture raw body</main>");
   const audit = new MemoryAudit();
   const app = await createHttpApp({
-    smartFetch: createSmartFetchUseCase({ fetcher, extractHtml, transformer: options.transformer, clock }),
+    captatum: createCaptatumUseCase({ fetcher, extractHtml, transformer: options.transformer, clock }),
     runtime: { flavor: "hosted", oauth },
     clock,
     audit,
@@ -181,7 +181,7 @@ function rpcPayload(input: RpcInput): Record<string, unknown> {
     jsonrpc: "2.0",
     id: 1,
     method: "tools/call",
-    params: { name: "smart_fetch", arguments: input.arguments },
+    params: { name: "captatum", arguments: input.arguments },
   };
 }
 
@@ -238,8 +238,8 @@ class MemoryStore implements StorePort {
 function hostedConfig(): HostedOAuthConfig {
   const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
   return {
-    issuer: "https://smart-fetch.test",
-    resource: "https://smart-fetch.test/mcp",
+    issuer: "https://captatum.test",
+    resource: "https://captatum.test/mcp",
     consentSigningSecret: "test-consent-secret-with-enough-entropy",
     signingPrivateJwk: { ...privateKey.export({ format: "jwk" }), alg: "ES256", kid: "test-key-1" } as JWK,
     signingKeyId: "test-key-1",

@@ -1,16 +1,20 @@
 # Contracts
 
-Tracks the public and internal contracts for smart-fetch. Update this file **before** changing any tool, port, schema, endpoint, or error shape. v0: fields may be added freely; renaming or removing a field is a breaking change and must be noted here.
+Tracks the public and internal contracts for captatum. Update this file **before** changing any tool, port, schema, endpoint, or error shape. v0: fields may be added freely; renaming or removing a field is a breaking change and must be noted here.
 
 ## Versioning
 
 Current contract version: `v0`.
 
+### Breaking changes
+
+- **2026-06-24 — product + tool rename (breaking):** the MCP tool name changed `smart_fetch` → `captatum`; the audit `tool` field changed `smart_fetch` → `captatum`; the OAuth consent cookie changed `smart_fetch_consent` → `captatum_consent`; and the consent JWT `typ`/`aud` claims changed `smart-fetch-*` → `captatum-*`. MCP clients referencing the old tool name must be re-registered. Internal identifiers, file names, env vars (`SMART_FETCH_*` → `CAPTATUM_*`), and the MCP server `name` were also renamed; the `Result`/`structuredContent` field shapes are unchanged. OAuth opaque-token prefixes were rebranded (wire-visible): client_id `sfc_` → `ctc_`, authorization code `sfac_` → `ctac_`, refresh token `sfrt.` → `ctrt.`; already-issued `sfrt.`-prefixed refresh tokens will no longer parse their family id, so clients must re-authorize.
+
 ## Product
 
-smart-fetch is a general-purpose MCP fetch tool for AI agents: fetch **any** URL (rendering JS when needed) and return **token-efficient** content plus **provenance** describing how the result was produced. The goal is to give agents what Claude Code's built-in `WebFetch` gives them — a concise answer about a page — but **token-efficient** (the default output is a summary produced via the free-model router), with the ability to return **raw** content on request, and actually working on JS-rendered pages.
+captatum is a general-purpose MCP fetch tool for AI agents: fetch **any** URL (rendering JS when needed) and return **token-efficient** content plus **provenance** describing how the result was produced. The goal is to give agents what Claude Code's built-in `WebFetch` gives them — a concise answer about a page — but **token-efficient** (the default output is a summary produced via the free-model router), with the ability to return **raw** content on request, and actually working on JS-rendered pages.
 
-Why it beats `WebFetch`: `WebFetch` is a static GET + Turndown (which drops `<script>` JSON-LD and app state) + a Haiku summary, with no JS execution. smart-fetch uses anti-bot TLS-fingerprinted fetch (`wreq-js`), renders JS when a page needs it, extracts structured data from **raw** HTML, defaults to a token-efficient summary (free models via OpenRouter, or local Ollama), can return raw content on demand, and reports provenance on every response.
+Why it beats `WebFetch`: `WebFetch` is a static GET + Turndown (which drops `<script>` JSON-LD and app state) + a Haiku summary, with no JS execution. captatum uses anti-bot TLS-fingerprinted fetch (`wreq-js`), renders JS when a page needs it, extracts structured data from **raw** HTML, defaults to a token-efficient summary (free models via OpenRouter, or local Ollama), can return raw content on demand, and reports provenance on every response.
 
 ## Protocol
 
@@ -28,7 +32,7 @@ Why it beats `WebFetch`: `WebFetch` is a static GET + Turndown (which drops `<sc
   entrypoint: it runs the **same** core engine in-process over an
   `StdioServerTransport` (`@modelcontextprotocol/sdk/server/stdio.js`) for a
   single local agent. It has **no OAuth**, opens **no network listener**, and is
-  **not** a remote proxy. It reuses the hosted `smart_fetch` use case and tool
+  **not** a remote proxy. It reuses the hosted `captatum` use case and tool
   schema unchanged (`src/interfaces/mcp/local-server.ts` builds the same MCP
   server the `POST /mcp` route serves, with single-user local auth). It refuses
   to start under the `hosted` flavor (fails loudly rather than exposing an
@@ -38,7 +42,7 @@ Why it beats `WebFetch`: `WebFetch` is a static GET + Turndown (which drops `<sc
 - Auth is conditional on deployment flavor (see OAuth / Deployment): the hosted flavor requires gateway OAuth bearer tokens; a self-contained local-binary flavor runs without auth.
 - Inbound Host/Origin DNS-rebinding protection via the SDK transport (`enableDnsRebindingProtection`, `allowedHosts`, `allowedOrigins`). Hosted boot requires explicit `MCP_ALLOWED_HOSTS` and `MCP_ALLOWED_ORIGINS`; local defaults are loopback-only.
 
-## Tool: `smart_fetch`
+## Tool: `captatum`
 
 One tool. Input (v0):
 
@@ -69,7 +73,7 @@ Result {
   code, codeText,             // HTTP status of the final response
   durationMs,                 // total wall-clock
   result,                     // payload the agent consumes: summary text (default), raw content, or extracted JSON
-  // smart-fetch provenance
+  // captatum provenance
   schemaVersion: 1,
   finalUrl, redirects: [{ url, status }],
   tier: 1 | 2 | 3 | "none" | "error" | "render-unavailable" | "render-blocked",
@@ -212,7 +216,7 @@ detector); captcha/challenge pages currently fall to `"login"` or `"none"`.
   in SPA mode); content behind a Cloudflare/anti-bot interstitial that needs a
   real browser; and embedded widgets rendered client-side on a third-party
   domain (e.g. an Ashby board). Gated by `allowRender` (default false) so a bare
-  `smart-fetch` never spawns a browser.
+  `captatum` never spawns a browser.
 
 ## Transform (default output path)
 
@@ -266,7 +270,7 @@ OAuth state only (auth codes + refresh tokens, hashed), behind a swappable
 `StorePort`:
 - **Hosted flavor → TiDB** via `mysql2`, configured with
   `TIDB_HOST/PORT/DATABASE/USER/PASSWORD`. The code ships the TiDB store and
-  migrations; provisioning the `smartfetch` database/user/security-group rule is
+  migrations; provisioning the `captatum` database/user/security-group rule is
   deployment work outside this repo slice. No fetched content/body/cache rows are
   stored.
 - **SQLite implementation → `node:sqlite`** (file on disk, no server) is shipped
@@ -308,7 +312,7 @@ structuredContent"). Example from `raw-safe.json`:
   "jsRequired": false,
   "code": 200,
   "codeText": "OK",
-  "result": "Contract Fixture Smart fetch fixture body for contract reconciliation.",
+  "result": "Contract Fixture Captatum fixture body for contract reconciliation.",
   "timings": { "totalMs": 0, "fetchMs": 0 },
   "errors": []
 }
@@ -338,7 +342,7 @@ reject (Tier-1 pre-download) and a **non-fatal advisory** entry inside a
 
 ## Audit event
 
-One per tool call: `{ occurredAt, subject?, clientId?, tool:"smart_fetch", url_host (scheme+host only), tier, platform, output, status, bytes, durationMs, transformProvider?, transformModel? }`. OAuth transitions also write metadata-only auth events: `{ occurredAt, event, status, clientId?, subject?, resource?, scopes?, redirectHost?, reason? }`. Never includes body, full URL path/query for private hosts, authorization codes, refresh tokens, access tokens, consent tokens, or credentials.
+One per tool call: `{ occurredAt, subject?, clientId?, tool:"captatum", url_host (scheme+host only), tier, platform, output, status, bytes, durationMs, transformProvider?, transformModel? }`. OAuth transitions also write metadata-only auth events: `{ occurredAt, event, status, clientId?, subject?, resource?, scopes?, redirectHost?, reason? }`. Never includes body, full URL path/query for private hosts, authorization codes, refresh tokens, access tokens, consent tokens, or credentials.
 
 ## Deployment
 

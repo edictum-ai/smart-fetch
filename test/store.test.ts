@@ -211,7 +211,7 @@ function authCode(rawCode: string, expiresAt: string): SaveAuthCodeInput {
     clientId: "client-1",
     subject: "subject-1",
     redirectUri: "https://client.test/callback",
-    resource: "https://smart-fetch.test",
+    resource: "https://captatum.test",
     scopes: ["fetch:read"],
     codeChallenge: "pkce-challenge",
     codeChallengeMethod: "S256",
@@ -241,7 +241,7 @@ function sha256Hex(value: string): string {
 }
 
 function sqlitePath(): { file: string; cleanup: () => void } {
-  const dir = mkdtempSync(join(tmpdir(), "smart-fetch-store-"));
+  const dir = mkdtempSync(join(tmpdir(), "captatum-store-"));
   return {
     file: join(dir, "oauth.sqlite"),
     cleanup: () => rmSync(dir, { recursive: true, force: true }),
