@@ -7,7 +7,7 @@ import { extractHtml } from "./infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "./infrastructure/wreq/requester.ts";
 import { createDefaultLlmTransformer } from "./infrastructure/llm/model-router.ts";
 import { createRenderer } from "./infrastructure/render/index.ts";
-import { createTidbStore } from "./infrastructure/tidb/index.ts";
+import { createHostedStore } from "./infrastructure/store-selection.ts";
 import type { StorePort } from "./application/ports/store.ts";
 import { assertHostedFlavor, createHttpApp } from "./interfaces/http/app.ts";
 
@@ -69,24 +69,23 @@ async function shutdown(): Promise<void> {
 
 async function storeFor(runtimeConfig: AuthRuntimeConfig): Promise<StorePort | undefined> {
   if (runtimeConfig.flavor !== "hosted") return undefined;
-  const sslCa = config.tidb.sslCa();
-  // SQLSTORE-1: any HOSTED deploy opens a TiDB connection, so require TLS
-  // (TIDB_SSL_CA) regardless of NODE_ENV — OAuth token hashes + the DB password
-  // must not cross the wire in plaintext. Gated on flavor (not NODE_ENV) so a
-  // hosted boot missing NODE_ENV=production still fails closed.
-  if (!sslCa) {
-    throw new Error("Hosted flavor requires TIDB_SSL_CA (TiDB TLS)");
-  }
-  return await createTidbStore({
-    host: config.tidb.host(),
-    port: config.tidb.port(),
-    database: config.tidb.database(),
-    user: config.tidb.user(),
-    password: config.tidb.password(),
-    waitForConnections: true,
-    connectionLimit: 5,
-    ...(sslCa ? { ssl: { minVersion: "TLSv1.2", rejectUnauthorized: true, ca: sslCa } } : {}),
+  // DEFAULT backend is SQLite (a single file, no server) so a hosted deploy needs
+  // no database — one-click deploys work with zero external state. Set TIDB_HOST
+  // to opt into the TiDB scale path (TLS still required, SQLSTORE-1). The choice
+  // and TLS gate live in store-selection.ts.
+  const { store, backend } = await createHostedStore({
+    tidb: {
+      host: config.tidb.host(),
+      port: config.tidb.port(),
+      database: config.tidb.database(),
+      user: config.tidb.user(),
+      password: config.tidb.password(),
+      sslCa: config.tidb.sslCa(),
+    },
+    sqlitePath: config.store.sqlitePath(),
   });
+  console.log(`captatum OAuth-state store: ${backend}`);
+  return store;
 }
 
 function mcpSecurity(runtimeConfig: AuthRuntimeConfig, host: string, port: number) {

@@ -8,7 +8,8 @@ the contract reference; this file is the security reasoning.
 ## Assets
 
 - OAuth signing keys and token hashes (hosted flavor only).
-- TiDB credentials (hosted flavor only).
+- OAuth-state store credentials — the SQLite file path (default backend), or TiDB
+  credentials when `TIDB_HOST` is set (hosted flavor only).
 - Audit events.
 - **Fetched page content is UNTRUSTED DATA, never an asset to protect as
   instructions.** It is treated as hostile text throughout.
@@ -17,10 +18,12 @@ the contract reference; this file is the security reasoning.
 
 - Browser and agent clients are outside the gateway trust boundary.
 - The gateway is the security boundary for scopes and tools.
-- TiDB is reachable only from the captatum task security group, on `4000/tcp`.
-  The hosted flavor reuses an existing MySQL-compatible (TiDB) instance
-  provisioned in the private infrastructure — no new database server. The
-  specific host/account live in the private infra repo, not this public repo.
+- The DEFAULT hosted OAuth-state store is a local SQLite file (`node:sqlite`,
+  no network) — the OAuth codes/tokens live in a file on the gateway's disk, so
+  it has no DB network trust boundary. The optional TiDB scale path (when
+  `TIDB_HOST` is set) is reachable only from the captatum task security group on
+  `4000/tcp` and reuses an existing MySQL-compatible instance in the private
+  infrastructure; its host/account live in the private infra repo, not here.
 - The **local-binary flavor has no network trust boundary** — it is single-user /
   single-agent only and runs without auth. It must never be exposed on a network.
   Its entrypoint is the stdio bridge (`src/interfaces/mcp/stdio-bridge.ts`), which
@@ -118,7 +121,8 @@ the contract reference; this file is the security reasoning.
   SNI and certificate verification. This keeps SSRF controls intact but means the
   `wreq-js` TLS/JA3+JA4 anti-bot benefit is only active for plain HTTP until an
   HTTPS checked-IP + original TLS identity path is proven.
-- Single-node TiDB (hosted flavor) is not HA.
+- Single-node store: the default SQLite file (and single-node TiDB) is not HA.
+  SQLite suits single-instance / small-team hosted deploys; select TiDB for scale.
 
 ## Implementation Gates
 

@@ -1,0 +1,21 @@
+# Railway service config for the captatum gateway (hosted flavor).
+# `railway.toml` covers build/deploy knobs; the service IMAGE and the persistent
+# VOLUME are set in the Railway dashboard (or via the `railway` CLI) — see
+# deploy/railway.md.
+#
+# Storage: the default SQLite store needs a persistent volume mounted at /data.
+#   Dashboard: Settings → Volumes → add a volume at /data.
+#   Env: CAPTATUM_SQLITE_PATH=/data/captatum.sqlite
+#
+# Tier-3: this file describes ONE gateway service. For JS rendering at scale, add a
+# SECOND Railway service from ghcr.io/edictum-ai/captatum-browser and set the
+# gateway's CAPTATUM_BROWSER_CDP_ENDPOINT=http://<browser-service>:9222 over the
+# private network. Without it, leave allowRender off (default) — the gateway will
+# not spawn a browser.
+
+[deploy]
+startCommand = "node --no-warnings src/server.ts"
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
