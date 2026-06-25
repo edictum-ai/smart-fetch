@@ -69,8 +69,8 @@ export function extractVisibleText(html: string): string {
 // by a digit, so "3. item"/"Done. Next" untouched; commas left so lists survive).
 function normalizeFragmentedNumbers(text: string): string {
   return text
-    .replace(/([€£¥₹$])\s+(\d)/g, "$1$2")
-    .replace(/(\d)\s+\.(\d)/g, "$1.$2")
+    .replace(/([€£¥₹$])\s+(\d[\d ,]*)\s*\.\s*(\d{1,4})/g, "$1$2.$3") // fragmented PRICE; decimal required so literal "$ 1" (e.g. in <pre>) is untouched
+    .replace(/(\d)\s+\.(\d)/g, "$1.$2") // "10 .90"->"10.90"; dot followed by a digit so lists/periods are safe
     .replace(/(\d)\s+([€£¥₹])/g, "$1$2");
 }
 

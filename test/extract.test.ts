@@ -333,6 +333,9 @@ test("extractVisibleText rejoins inline-split prices without merging lists/perio
   assert.match(mixed, /Total 10\.90;/, "decimal fragment rejoined");
   assert.match(mixed, /10, 20, 30/, "comma list preserved");
   assert.match(mixed, /End\. Next\./, "sentence periods preserved");
+  // A literal "$ 1" (no decimal — e.g. inside <pre>/<code> where the space is
+  // meaningful) must NOT be collapsed to "$1".
+  assert.equal(extractVisibleText("<pre>token: $ 1</pre>"), "token: $ 1");
 });
 
 test("extractVisibleText does not treat </scripture> as a </script> close", () => {
