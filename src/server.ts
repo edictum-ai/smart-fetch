@@ -1,7 +1,7 @@
 import type { AuditLoggerPort, AuthAuditEvent, ToolAuditEvent } from "./application/ports/audit.ts";
 import type { ClockPort } from "./application/ports/clock.ts";
 import { loadAuthRuntimeConfig, type AuthRuntimeConfig } from "./application/use-cases/oauth-config.ts";
-import { createSmartFetchUseCase } from "./application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "./application/use-cases/captatum.ts";
 import { config } from "./config.ts";
 import { extractHtml } from "./infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "./infrastructure/wreq/requester.ts";
@@ -40,7 +40,7 @@ if (store) {
     );
   }, 5 * 60 * 1000).unref();
 }
-const smartFetch = createSmartFetchUseCase({
+const captatum = createCaptatumUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
   transformer: await createDefaultLlmTransformer(),
@@ -48,7 +48,7 @@ const smartFetch = createSmartFetchUseCase({
   clock,
 });
 const app = await createHttpApp({
-  smartFetch,
+  captatum,
   runtime,
   clock,
   audit,

@@ -8,9 +8,9 @@ import type {
   RenderPort,
 } from "../src/application/ports/renderer.ts";
 import type { TransformInput, TransformPort, TransformResult } from "../src/application/ports/transformer.ts";
-import { createSmartFetchUseCase } from "../src/application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../src/application/use-cases/captatum.ts";
 import type { HtmlExtraction, HtmlExtractionInput } from "../src/application/use-cases/tier1-extract.ts";
-import { SmartFetchInputError } from "../src/application/use-cases/smart-fetch-input.ts";
+import { CaptatumInputError } from "../src/application/use-cases/captatum-input.ts";
 
 test("successful Tier-1 fetch plus extraction returns Result provenance", async () => {
   const html = "<html><title>ignored</title><body>Hello</body></html>";
@@ -25,7 +25,7 @@ test("successful Tier-1 fetch plus extraction returns Result provenance", async 
     structured: { og: { "og:title": "Extracted Title" } },
   }));
 
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher,
     extractHtml: extractor.extract,
     clock: new FakeClock([100, 112, 115, 115]),
@@ -84,7 +84,7 @@ test("guarded-fetch reject returns structured error and short-circuits extractio
   });
   const extractor = new FakeExtractor(extraction({ text: "must not run" }));
 
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher,
     extractHtml: extractor.extract,
     clock: new FakeClock([0, 7]),
@@ -115,7 +115,7 @@ test("invalid input is rejected before fetch, extraction, transform, or render",
   const renderer = new FakeRenderer();
 
   await assert.rejects(
-    createSmartFetchUseCase({
+    createCaptatumUseCase({
       fetcher,
       extractHtml: extractor.extract,
       transformer,
@@ -123,8 +123,8 @@ test("invalid input is rejected before fetch, extraction, transform, or render",
       clock: new FakeClock([0]),
     }).execute({ url: "file:///etc/passwd" }),
     (error) => {
-      assert.equal(error instanceof SmartFetchInputError, true);
-      assert.deepEqual((error as SmartFetchInputError).body, {
+      assert.equal(error instanceof CaptatumInputError, true);
+      assert.deepEqual((error as CaptatumInputError).body, {
         error: { code: "unsupported_scheme", message: "Only http and https URLs are allowed" },
       });
       return true;
@@ -139,7 +139,7 @@ test("invalid input is rejected before fetch, extraction, transform, or render",
 
 test("output raw returns clean content without transform", async () => {
   const transformer = new FakeTransform();
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Raw</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Clean raw content" })).extract,
     transformer,
@@ -153,7 +153,7 @@ test("output raw returns clean content without transform", async () => {
 });
 
 test("default summary degrades to raw with unconfigured transform provenance", async () => {
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Summary</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Raw fallback content" })).extract,
     clock: new FakeClock([10, 14, 15, 15]),
@@ -167,7 +167,7 @@ test("default summary degrades to raw with unconfigured transform provenance", a
 
 test("allowRender defaults false and render port is not called on shell gate", async () => {
   const renderer = new FakeRenderer();
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({ html: "<div id=\"root\"></div>" })),
     extractHtml: new FakeExtractor(extraction({
       text: "",
@@ -210,7 +210,7 @@ test("allowRender true renders shell and returns Tier-3 provenance", async () =>
     return extraction({ text: "", jsRequired: true, shellReason: "empty-spa-shell" });
   });
 
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({
       html: shellHtml,
       finalUrl: "https://spa.test/",
@@ -242,7 +242,7 @@ test("configured transform receives prompt, schema, budget, and transform overri
   const schema = { type: "object", properties: { title: { type: "string" } } };
   const override = { provider: "ollama", model: "llama-local", temperature: 0 };
 
-  const result = await createSmartFetchUseCase({
+  const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Transform</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Source content" })).extract,
     transformer,

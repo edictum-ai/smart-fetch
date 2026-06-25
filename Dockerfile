@@ -1,5 +1,5 @@
-# smart-fetch hosted MCP server. Node 24 native TS, pnpm 10.32.0, Chromium for Tier-3.
-FROM node:24.16.0-bookworm-slim@sha256:1df790a7d590f617d0d3c2cd84cbe18b5400ff972dd9701670f7e5a4f1634e52
+# captatum hosted MCP server. Node 24 native TS, pnpm 10.32.0, Chromium for Tier-3.
+FROM node:24.17.0-bookworm-slim@sha256:862263c612aa437e3037674b85419622a9d93bff80aa1eee5398dfe686375532
 
 ENV NODE_ENV=production
 ENV PNPM_HOME=/pnpm

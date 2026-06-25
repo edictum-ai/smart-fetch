@@ -19,7 +19,7 @@ export interface OAuthRoutesDeps {
   allowedOrigins: string[];
 }
 
-const CONSENT_COOKIE = "smart_fetch_consent";
+const CONSENT_COOKIE = "captatum_consent";
 
 // Cloudflare Access JWT verifier (created once when configured). When enabled,
 // the /oauth/authorize subject is the verified Access email, not a placeholder.
@@ -62,7 +62,7 @@ export async function registerOAuthRoutes(app: FastifyInstance, deps: OAuthRoute
       const esc = (v: string) => v.replace(/[<>&"']/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&#39;" })[c]!);
       const scopeList = prepared.scopes.map((s) => `<div class="scope">${esc(s)}</div>`).join("");
       reply.type("text/html").header("x-content-type-options", "nosniff").header("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'").send(
-        `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>smart-fetch Authorize</title><style>body{font-family:system-ui,sans-serif;max-width:480px;margin:60px auto;padding:0 20px;color:#1a1a1a}h1{font-size:1.3rem}.scope{background:#f4f4f4;padding:8px 12px;border-radius:6px;font-family:monospace;font-size:.85rem;margin:4px 0}form{margin-top:24px}button{padding:10px 24px;font-size:1rem;border:none;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer}</style></head><body><h1>Authorize smart-fetch</h1><p>An application requests access to <strong>${esc(prepared.resource)}</strong>.</p><p>Requested scopes:</p>${scopeList}<form method="POST" action="/oauth/authorize/approve"><input type="hidden" name="consent_token" value="${prepared.consentToken}"><input type="hidden" name="approved" value="true"><button type="submit">Approve</button></form></body></html>`,
+        `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>captatum Authorize</title><style>body{font-family:system-ui,sans-serif;max-width:480px;margin:60px auto;padding:0 20px;color:#1a1a1a}h1{font-size:1.3rem}.scope{background:#f4f4f4;padding:8px 12px;border-radius:6px;font-family:monospace;font-size:.85rem;margin:4px 0}form{margin-top:24px}button{padding:10px 24px;font-size:1rem;border:none;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer}</style></head><body><h1>Authorize captatum</h1><p>An application requests access to <strong>${esc(prepared.resource)}</strong>.</p><p>Requested scopes:</p>${scopeList}<form method="POST" action="/oauth/authorize/approve"><input type="hidden" name="consent_token" value="${prepared.consentToken}"><input type="hidden" name="approved" value="true"><button type="submit">Approve</button></form></body></html>`,
       );
     } catch (error) {
       return sendError(reply, error);
@@ -158,7 +158,7 @@ async function registerClient(
       redirectHost: redirectUris[0] ? hostOf(redirectUris[0]) : undefined,
     });
     return {
-      client_id: `sfc_${cryptoRandom()}`,
+      client_id: `ctc_${cryptoRandom()}`,
       client_id_issued_at: Math.floor(deps.clock.nowMs() / 1000),
       redirect_uris: redirectUris,
       token_endpoint_auth_method: "none",

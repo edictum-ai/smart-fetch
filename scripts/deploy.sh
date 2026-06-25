@@ -26,12 +26,12 @@ set -euo pipefail
 AWS_PROFILE="personal-arnold"
 REGION="eu-central-1"
 ACCOUNT="291807115868"
-GW_REPO="personal-memory-prod-smart-fetch"
+GW_REPO="personal-memory-prod-captatum"
 GW_URI="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com/$GW_REPO"
-CLUSTER="personal-memory-prod-smart-fetch"
-SVC="personal-memory-prod-smart-fetch"
+CLUSTER="personal-memory-prod-captatum"
+SVC="personal-memory-prod-captatum"
 INFRA="$HOME/project/personal-memory/personal-memory-infra/opentofu/envs/prod"
-HOSTNAME="smart-fetch.arnoldcartagena.com"
+HOSTNAME="captatum.arnoldcartagena.com"
 # The browser sidecar only needs a new tag when Dockerfile.browser / scripts/browser-sidecar.sh
 # change (Chromium must still match the gateway's playwright pin). Default to the last shipped tag.
 BROWSER_TAG="${BROWSER_TAG:-6f3b58c}"
@@ -65,9 +65,9 @@ echo "verified $GW_REPO:$TAG in ECR"
 
 step "gate 4: tofu apply (gateway=$TAG browser=$BROWSER_TAG desired_count=1)"
 ( cd "$INFRA" && tofu apply \
-    -var smart_fetch_desired_count=1 \
-    -var smart_fetch_image_tag="$TAG" \
-    -var smart_fetch_browser_image_tag="$BROWSER_TAG" \
+    -var captatum_desired_count=1 \
+    -var captatum_image_tag="$TAG" \
+    -var captatum_browser_image_tag="$BROWSER_TAG" \
     -auto-approve )
 
 step "gate 5: wait for the NEW task def's task to reach RUNNING"

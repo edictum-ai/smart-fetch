@@ -22,7 +22,7 @@ export const config = {
     issuer: () => envString("CF_ACCESS_ISSUER", ""),
   },
   deployment: {
-    flavor: () => envString("SMART_FETCH_FLAVOR", envString("DEPLOYMENT_FLAVOR", "local-binary")),
+    flavor: () => envString("CAPTATUM_FLAVOR", envString("DEPLOYMENT_FLAVOR", "local-binary")),
     production: () => envString("NODE_ENV", "development") === "production",
   },
   oauth: {
@@ -78,7 +78,7 @@ export const config = {
   tidb: {
     host: () => envString("TIDB_HOST", ""),
     port: () => envPositiveInteger("TIDB_PORT", 4000),
-    database: () => envString("TIDB_DATABASE", "smartfetch"),
+    database: () => envString("TIDB_DATABASE", "captatum"),
     user: () => envString("TIDB_USER", ""),
     password: () => envString("TIDB_PASSWORD", ""),
     sslCa: () => envString("TIDB_SSL_CA", ""),

@@ -6,7 +6,7 @@
  *
  *   node --no-warnings src/dev/render-probe.ts <url> [--render] [--full]
  */
-import { createSmartFetchUseCase } from "../application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../application/use-cases/captatum.ts";
 import { extractHtml } from "../infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "../infrastructure/wreq/requester.ts";
 import { createRenderer } from "../infrastructure/render/index.ts";
@@ -20,7 +20,7 @@ if (!url) {
 }
 
 const clock = { nowMs: () => Date.now() };
-const smartFetch = createSmartFetchUseCase({
+const captatum = createCaptatumUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
   renderer: createRenderer(),
@@ -28,7 +28,7 @@ const smartFetch = createSmartFetchUseCase({
 });
 
 const startedAt = Date.now();
-const result = await smartFetch.execute({ url, output: "raw", allowRender });
+const result = await captatum.execute({ url, output: "raw", allowRender });
 const elapsedMs = Date.now() - startedAt;
 
 console.log(JSON.stringify({

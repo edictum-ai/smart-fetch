@@ -11,7 +11,7 @@ const transformOverrideSchema = z.object({
   provider: z.string().min(1).optional(),
 }).catchall(z.unknown());
 
-const smartFetchInputSchema = z.object({
+const captatumInputSchema = z.object({
   url: z.string().min(1),
   prompt: z.string().optional(),
   output: z.enum(["summary", "raw", "extract"]).optional(),
@@ -24,7 +24,7 @@ const smartFetchInputSchema = z.object({
   debug: z.boolean().optional(),
 }).strict();
 
-export interface SmartFetchDefaults {
+export interface CaptatumDefaults {
   maxBytes: number;
   maxBytesHardCap: number;
   timeoutMs: number;
@@ -36,7 +36,7 @@ export interface SmartFetchDefaults {
   prompt: string;
 }
 
-export const DEFAULT_SMART_FETCH_DEFAULTS: SmartFetchDefaults = {
+export const DEFAULT_CAPTATUM_DEFAULTS: CaptatumDefaults = {
   maxBytes: 5 * 1024 * 1024,
   maxBytesHardCap: 5 * 1024 * 1024,
   timeoutMs: 15_000,
@@ -48,7 +48,7 @@ export const DEFAULT_SMART_FETCH_DEFAULTS: SmartFetchDefaults = {
   prompt: DEFAULT_PROMPT,
 };
 
-export interface SmartFetchInput {
+export interface CaptatumInput {
   url: string;
   prompt?: string;
   output?: Output;
@@ -61,7 +61,7 @@ export interface SmartFetchInput {
   debug?: boolean;
 }
 
-export interface NormalizedSmartFetchInput {
+export interface NormalizedCaptatumInput {
   url: string;
   prompt: string;
   requestedOutput: Output;
@@ -81,20 +81,20 @@ export interface ContractErrorBody {
   error: { code: string; message: string };
 }
 
-export class SmartFetchInputError extends Error {
+export class CaptatumInputError extends Error {
   readonly body: ContractErrorBody;
 
   constructor(code: string, message: string) {
     super(message);
-    this.name = "SmartFetchInputError";
+    this.name = "CaptatumInputError";
     this.body = { error: { code, message } };
   }
 }
 
-export function normalizeSmartFetchInput(
+export function normalizeCaptatumInput(
   value: unknown,
-  defaults: SmartFetchDefaults = DEFAULT_SMART_FETCH_DEFAULTS,
-): NormalizedSmartFetchInput {
+  defaults: CaptatumDefaults = DEFAULT_CAPTATUM_DEFAULTS,
+): NormalizedCaptatumInput {
   const parsed = parseInput(value);
   const url = normalizeContractUrl(parsed.url);
   return {
@@ -113,36 +113,36 @@ export function normalizeSmartFetchInput(
   };
 }
 
-function parseInput(value: unknown): SmartFetchInput {
-  const result = smartFetchInputSchema.safeParse(value);
+function parseInput(value: unknown): CaptatumInput {
+  const result = captatumInputSchema.safeParse(value);
   if (result.success) return result.data;
   const first = result.error.issues[0];
   if (first?.path[0] === "url") {
-    throw new SmartFetchInputError("invalid_url", "URL is required");
+    throw new CaptatumInputError("invalid_url", "URL is required");
   }
-  throw new SmartFetchInputError("invalid_input", "smart_fetch input is invalid");
+  throw new CaptatumInputError("invalid_input", "captatum input is invalid");
 }
 
 function normalizeContractUrl(input: string): string {
   if (CRLF.test(input)) {
-    throw new SmartFetchInputError("crlf_url", "URL contains a forbidden CRLF sequence");
+    throw new CaptatumInputError("crlf_url", "URL contains a forbidden CRLF sequence");
   }
 
   let parsed: URL;
   try {
     parsed = new URL(input);
   } catch {
-    throw new SmartFetchInputError("invalid_url", "URL is invalid");
+    throw new CaptatumInputError("invalid_url", "URL is invalid");
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new SmartFetchInputError("unsupported_scheme", "Only http and https URLs are allowed");
+    throw new CaptatumInputError("unsupported_scheme", "Only http and https URLs are allowed");
   }
   if (parsed.username || parsed.password) {
-    throw new SmartFetchInputError("userinfo_url", "URLs with userinfo are not allowed");
+    throw new CaptatumInputError("userinfo_url", "URLs with userinfo are not allowed");
   }
   if (!parsed.hostname) {
-    throw new SmartFetchInputError("invalid_url", "URL must include a hostname");
+    throw new CaptatumInputError("invalid_url", "URL must include a hostname");
   }
 
   parsed.username = "";

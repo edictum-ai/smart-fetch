@@ -44,7 +44,7 @@ After acquisition, the **Transform** stage produces the output:
 
 ---
 
-## The `smart_fetch` Tool
+## The `captatum` Tool
 
 | Parameter | Required | Description |
 |---|---|---|
@@ -134,7 +134,7 @@ No inbound ports are open on the task itself — all traffic flows through the C
                     (cloudflared sidecar)
                           │
                     ┌─────┴──────┐
-                    │  Captatum  │ ← smart-fetch gateway (Node 24, Fastify)
+                    │  Captatum  │ ← captatum gateway (Node 24, Fastify)
                     │  gateway   │    OAuth + MCP + transform
                     └─────┬──────┘
                           │
@@ -153,7 +153,7 @@ One ECS task, three containers (gateway + cloudflared + browser), awsvpc network
 
 1. **Cloudflare Tunnel** — create a tunnel, point it at `http://127.0.0.1:3000` (the gateway's listen port). The `cloudflared` sidecar connects using `TUNNEL_TOKEN`.
 2. **Cloudflare Access** — create an application policy on the tunnel's public hostname covering `/oauth/*`. This gates the OAuth flow behind human auth (email/SAML/etc.) so anonymous clients can't mint tokens. The app itself doesn't enforce this in-code (it's defense-in-depth) — the edge does.
-3. **DNS** — the tunnel's public hostname (e.g. `smart-fetch.example.com`) resolves through Cloudflare; no direct DNS to the task.
+3. **DNS** — the tunnel's public hostname (e.g. `captatum.example.com`) resolves through Cloudflare; no direct DNS to the task.
 
 #### Transform provider
 
@@ -223,4 +223,4 @@ Hosted deployment live (ECS/Fargate + Cloudflare Tunnel + Cloudflare Access + Ti
 
 ## Tool Name Note
 
-The product is **Captatum**. The MCP **tool identifier remains `smart_fetch`** (already registered in live ChatGPT/Claude.ai configs — renaming would break those connections).
+The product is **Captatum**. As of 2026-06-24 the MCP **tool identifier is `captatum`** (renamed from `smart_fetch`). Existing ChatGPT/Claude.ai connector configs that reference the old `smart_fetch` tool name must be re-registered — the rename intentionally breaks them.

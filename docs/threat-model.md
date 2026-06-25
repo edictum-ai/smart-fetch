@@ -1,6 +1,6 @@
 # Threat Model
 
-Status: v1 threat model for smart-fetch, a URL-fetcher that may also run a
+Status: v1 threat model for captatum, a URL-fetcher that may also run a
 headless browser = textbook SSRF + sandbox surface. Update before any change to
 egress, the browser path, or auth. `docs/contracts.md` §"Security controls" is
 the contract reference; this file is the security reasoning.
@@ -17,7 +17,7 @@ the contract reference; this file is the security reasoning.
 
 - Browser and agent clients are outside the gateway trust boundary.
 - The gateway is the security boundary for scopes and tools.
-- TiDB is reachable only from the smart-fetch task security group, on `4000/tcp`.
+- TiDB is reachable only from the captatum task security group, on `4000/tcp`.
   The hosted flavor reuses an existing MySQL-compatible (TiDB) instance
   provisioned in the private infrastructure — no new database server. The
   specific host/account live in the private infra repo, not this public repo.
@@ -140,4 +140,4 @@ the contract reference; this file is the security reasoning.
   TiDB OAuth migration/provisioning, explicit `MCP_ALLOWED_HOSTS` /
   `MCP_ALLOWED_ORIGINS`, and authenticated client compatibility tests pass.
 - No Tier-3 default-on: `allowRender` must default to **false** so a bare
-  `smart-fetch` never spawns a browser.
+  `captatum` never spawns a browser.

@@ -82,9 +82,9 @@ function readHostedOAuthConfig(env: NodeJS.ProcessEnv): HostedOAuthConfig {
 }
 
 function readFlavor(env: NodeJS.ProcessEnv): DeploymentFlavor {
-  const raw = env.SMART_FETCH_FLAVOR ?? env.DEPLOYMENT_FLAVOR ?? "local-binary";
+  const raw = env.CAPTATUM_FLAVOR ?? env.DEPLOYMENT_FLAVOR ?? "local-binary";
   if (raw === "hosted" || raw === "local-binary") return raw;
-  throw new AuthConfigError("SMART_FETCH_FLAVOR must be hosted or local-binary");
+  throw new AuthConfigError("CAPTATUM_FLAVOR must be hosted or local-binary");
 }
 
 function envString(env: NodeJS.ProcessEnv, name: string, fallback: string): string {

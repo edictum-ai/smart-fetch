@@ -33,7 +33,7 @@ export function requireScope(auth: AuthorizedSubject, required: OAuthScope): voi
   }
 }
 
-export function requiredScopeForSmartFetch(input: unknown): OAuthScope {
+export function requiredScopeForCaptatum(input: unknown): OAuthScope {
   if (!isRecord(input)) return "fetch:transform";
   const output = typeof input.output === "string" ? input.output : undefined;
   if (output === "raw" && input.transform === undefined) return "fetch:read";

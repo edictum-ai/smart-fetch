@@ -6,7 +6,7 @@
  *   OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_MODEL=<model> \
  *     node --no-warnings src/dev/transform-probe.ts [url] [prompt]
  */
-import { createSmartFetchUseCase } from "../application/use-cases/smart-fetch.ts";
+import { createCaptatumUseCase } from "../application/use-cases/captatum.ts";
 import { extractHtml } from "../infrastructure/extract/index.ts";
 import { createWreqGuardedFetcher } from "../infrastructure/wreq/requester.ts";
 import { PlaywrightRenderer } from "../infrastructure/render/index.ts";
@@ -18,7 +18,7 @@ const output = (process.env.OUTPUT ?? "summary") as "summary" | "extract";
 const schema = process.env.SCHEMA ? JSON.parse(process.env.SCHEMA) : undefined;
 const clock = { nowMs: () => Date.now() };
 const transformer = await createDefaultLlmTransformer();
-const smartFetch = createSmartFetchUseCase({
+const captatum = createCaptatumUseCase({
   fetcher: createWreqGuardedFetcher(),
   extractHtml,
   transformer,
@@ -26,7 +26,7 @@ const smartFetch = createSmartFetchUseCase({
   clock,
 });
 
-const result = await smartFetch.execute({ url, output, prompt, ...(schema ? { schema } : {}) });
+const result = await captatum.execute({ url, output, prompt, ...(schema ? { schema } : {}) });
 console.log(JSON.stringify({
   url,
   tier: result.tier,

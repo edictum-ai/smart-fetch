@@ -19,18 +19,18 @@ import {
   LocalFlavorError,
   type LocalMcpDeps,
 } from "../src/interfaces/mcp/local-server.ts";
-import { smartFetchToolDefinition } from "../src/interfaces/mcp/schema.ts";
+import { captatumToolDefinition } from "../src/interfaces/mcp/schema.ts";
 
 const NOW_MS = Date.parse("2026-06-16T12:00:00.000Z");
 
-test("local bridge exposes smart_fetch with the same schema as hosted MCP", async () => {
+test("local bridge exposes captatum with the same schema as hosted MCP", async () => {
   const ctx = await connect({ fetcher: new FakeFetcher("<main>Body</main>") });
   const tools = await ctx.client.listTools();
-  const tool = tools.tools.find((entry) => entry.name === "smart_fetch");
+  const tool = tools.tools.find((entry) => entry.name === "captatum");
 
   assert.ok(tool);
-  assert.equal(tool.description, smartFetchToolDefinition.description);
-  assert.deepEqual(tool.inputSchema, smartFetchToolDefinition.inputSchema);
+  assert.equal(tool.description, captatumToolDefinition.description);
+  assert.deepEqual(tool.inputSchema, captatumToolDefinition.inputSchema);
   assert.equal(tool.inputSchema.additionalProperties, false);
   await ctx.close();
 });
@@ -41,7 +41,7 @@ test("local mode starts without OAuth secrets and returns a contract-shaped raw 
     // No `runtime` override: resolves via process env, which defaults to local-binary.
     const ctx = await connect({ fetcher: new FakeFetcher("<main>Local body</main>"), runtime: undefined });
     const call = await ctx.client.callTool({
-      name: "smart_fetch",
+      name: "captatum",
       arguments: { url: "https://fixture.test/page", output: "raw" },
     });
     const result = call.structuredContent as Record<string, unknown>;
@@ -77,7 +77,7 @@ test("local mode refuses the hosted flavor instead of exposing a network listene
 test("local mode blocks guarded-fetch failures the same way hosted mode does", async () => {
   const ctx = await connect({ fetcher: new RejectingFetcher("private_address", "blocked private address") });
   const call = await ctx.client.callTool({
-    name: "smart_fetch",
+    name: "captatum",
     arguments: { url: "https://blocked.test/", output: "raw" },
   });
   const result = call.structuredContent as Record<string, unknown>;
@@ -94,7 +94,7 @@ test("local mode runs the transform default with no token, matching hosted seman
   const transformer = new FakeTransformer();
   const ctx = await connect({ fetcher: new FakeFetcher("<main>Body</main>"), transformer });
   const call = await ctx.client.callTool({
-    name: "smart_fetch",
+    name: "captatum",
     arguments: { url: "https://fixture.test/", output: "summary", prompt: "what is this" },
   });
   const result = call.structuredContent as Record<string, unknown>;
@@ -112,7 +112,7 @@ test("debug flag gates heavy diagnostic fields through the real MCP server", asy
   const ctx = await connect({ fetcher: new FakeFetcher(richHtml) });
 
   const lean = await ctx.client.callTool({
-    name: "smart_fetch",
+    name: "captatum",
     arguments: { url: "https://fixture.test/", output: "raw" },
   });
   const leanShape = lean.structuredContent as Record<string, unknown>;
@@ -121,7 +121,7 @@ test("debug flag gates heavy diagnostic fields through the real MCP server", asy
   assert.equal("attempts" in leanShape, false, "attempts leaked into default payload");
 
   const debug = await ctx.client.callTool({
-    name: "smart_fetch",
+    name: "captatum",
     arguments: { url: "https://fixture.test/", output: "raw", debug: true },
   });
   const debugShape = debug.structuredContent as Record<string, unknown>;
@@ -172,7 +172,7 @@ function fixedClock(): ClockPort {
 
 function stripAuthEnv(): () => void {
   const keys = [
-    "SMART_FETCH_FLAVOR",
+    "CAPTATUM_FLAVOR",
     "DEPLOYMENT_FLAVOR",
     "OAUTH_ISSUER",
     "OAUTH_RESOURCE",

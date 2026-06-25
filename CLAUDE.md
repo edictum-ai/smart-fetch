@@ -2,7 +2,7 @@
 
 Captatum is an adaptive MCP web-fetch tool for AI agents. One tool, any URL: fetch → render JS only when needed → return **token-efficient** content + **provenance** (tier / finalUrl / platform / jsRequired). Default output is a concise **summary** (like WebFetch, but cheaper via the free-model router and actually working on JS pages); **raw** content is available on request. Beats WebFetch (static GET + Turndown + Haiku, no JS) via anti-bot `wreq-js` fetch (**HTTP TLS/JA3 fingerprint; HTTPS uses a checked-IP fallback with no fingerprint** — see contracts.md "security-required limitation"), JS rendering, raw-HTML structured extraction, and per-response provenance.
 
-> **Brand note:** the product/package is **Captatum**. The MCP **tool identifier remains `smart_fetch`** (already registered in live ChatGPT/Claude.ai configs — renaming it would break connections), and internal file/identifier names (`smart-fetch.ts`, `SmartFetchUseCase`, etc.) are unchanged. Only the public brand + wire-visible strings (package name, README, User-Agent, provenance marker) were renamed.
+> **Brand note (2026-06-24):** the product, package, MCP tool name, and all internal identifiers were renamed **smart-fetch → Captatum**. The MCP tool identifier is now `captatum` (was `smart_fetch`) — **this rename breaks existing ChatGPT/Claude.ai connector configs**, which must be re-registered with the new tool name. File/identifier names are renamed too (`captatum.ts`, `CaptatumUseCase`, `CAPTATUM_*` env vars, etc.). User-Agent and the `<!-- captatum ... -->` provenance marker already used the new brand.
 
 ## Source of truth for house rules
 
@@ -26,7 +26,7 @@ This repo follows two sibling reference repos — read them when a pattern is un
 ## Architecture (adaptive tiers)
 
 ```
-smart_fetch(url, { prompt?, output?, schema?, budget?, transform?, maxBytes?, timeoutMs?, allowRender? })
+captatum(url, { prompt?, output?, schema?, budget?, transform?, maxBytes?, timeoutMs?, allowRender? })
   0. guardedFetch(url)                 ← the ONLY egress primitive (rebinding-proof SSRF)
   1. TIER-1  wreq-js fetch (TLS fingerprint, anti-bot) + raw-HTML structured extraction
                (JSON-LD / OG / meta / app-state) + shell-gate → done if content present

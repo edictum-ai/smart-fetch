@@ -1,5 +1,5 @@
 /**
- * smart-fetch integration suite.
+ * captatum integration suite.
  *  - SSRF / provenance: always, no network (guard rejects pre-connect).
  *  - Feature probes: gated on LIVE=1 (real network). Transform-summary needs
  *    OPENROUTER_API_KEY; render needs Chromium.
@@ -114,12 +114,12 @@ describe("Transform — default summary + raw fallback (live)", () => {
 });
 
 describe("Baseline vs WebFetch — thesis proof (live)", () => {
-  live("script-stripped baseline LOSES the Ashby description; smart-fetch keeps it", async () => {
+  live("script-stripped baseline LOSES the Ashby description; captatum keeps it", async () => {
     const baseline = await webfetchBaseline(ASHBY_JOB);
     const sf = await run(ASHBY_JOB, { output: "raw", timeoutMs: 30000 });
     assert.ok(
       searchable(sf).length > baseline.length + 1000,
-      `smart-fetch should retain the JSON-LD body the baseline strips (sf=${searchable(sf).length}, base=${baseline.length})`,
+      `captatum should retain the JSON-LD body the baseline strips (sf=${searchable(sf).length}, base=${baseline.length})`,
     );
   });
 });

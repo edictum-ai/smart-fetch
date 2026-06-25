@@ -1,10 +1,10 @@
-# smart-fetch — Handoff Brief for Next Session
+# captatum — Handoff Brief for Next Session
 
 ## Context
 
-smart-fetch is deployed and working on AWS (ECS/Fargate + Cloudflare Tunnel + TiDB + OAuth + Cloudflare Access). Connected to both ChatGPT and Claude.ai. The core pipeline (fetch → extract → render → iframe capture → compact response) works end-to-end. 4/4 original URLs fetch content, but there are quality issues to fix.
+captatum is deployed and working on AWS (ECS/Fargate + Cloudflare Tunnel + TiDB + OAuth + Cloudflare Access). Connected to both ChatGPT and Claude.ai. The core pipeline (fetch → extract → render → iframe capture → compact response) works end-to-end. 4/4 original URLs fetch content, but there are quality issues to fix.
 
-**Deployed at:** `https://smart-fetch.arnoldcartagena.com/mcp`
+**Deployed at:** `https://captatum.arnoldcartagena.com/mcp`
 **Latest image tag:** `d50a3c9`
 **AWS profile:** `personal-arnold`
 **SSO login needed:** `aws sso login --profile personal-arnold`
@@ -12,20 +12,20 @@ smart-fetch is deployed and working on AWS (ECS/Fargate + Cloudflare Tunnel + Ti
 ## Build + deploy cycle
 
 ```bash
-cd /Users/acartagena/project/smart-fetch
+cd /Users/acartagena/project/captatum
 export AWS_PROFILE=personal-arnold
 corepack pnpm run check          # syntax + lines + typecheck
 git add -A && git commit -m "fix: ..."
 TAG=$(git rev-parse --short HEAD)
 docker buildx build --platform linux/arm64 \
-  -t 291807115868.dkr.ecr.eu-central-1.amazonaws.com/personal-memory-prod-smart-fetch:$TAG --push .
+  -t 291807115868.dkr.ecr.eu-central-1.amazonaws.com/personal-memory-prod-captatum:$TAG --push .
 cd /Users/acartagena/project/personal-memory/personal-memory-infra/opentofu/envs/prod
-tofu apply -var smart_fetch_desired_count=1 -var smart_fetch_image_tag=$TAG -auto-approve
-aws ecs update-service --cluster personal-memory-prod-smart-fetch \
-  --service personal-memory-prod-smart-fetch --force-new-deployment --profile personal-arnold
+tofu apply -var captatum_desired_count=1 -var captatum_image_tag=$TAG -auto-approve
+aws ecs update-service --cluster personal-memory-prod-captatum \
+  --service personal-memory-prod-captatum --force-new-deployment --profile personal-arnold
 ```
 
-**IMPORTANT:** Always pass `-var smart_fetch_desired_count=1` to tofu apply (default is 0).
+**IMPORTANT:** Always pass `-var captatum_desired_count=1` to tofu apply (default is 0).
 
 ## 5 fixes needed (priority order)
 
@@ -80,7 +80,7 @@ The extractor then runs on this combined HTML. But the title/metadata from the i
 **Problem:** The default `maxBytes: 250000` (250KB) is too small for some pages (the 2captcha Turnstile demo exceeds it). The response shows `errors: ["max_bytes advisory"]`.
 
 **Fix:** Either:
-- Raise the default to `500000` (500KB) in `src/application/use-cases/smart-fetch-input.ts` (`DEFAULT_SMART_FETCH_DEFAULTS.maxBytes`).
+- Raise the default to `500000` (500KB) in `src/application/use-cases/captatum-input.ts` (`DEFAULT_CAPTATUM_DEFAULTS.maxBytes`).
 - OR make the byte cap advisory (truncate content instead of rejecting the whole response). When content exceeds maxBytes, slice it + add `[Content truncated at N bytes]` rather than returning an error.
 
 ### Fix 5: Remove dead fixtures from test-urls.md
@@ -91,8 +91,8 @@ The extractor then runs on this combined HTML. But the title/metadata from the i
 
 ## Follow-up items (not blocking, lower priority)
 
-- **Cloudflare Access JWT code verification**: port personal-memory-gateway's `cloudflare-identity.ts` to smart-fetch so the OAuth `subject` comes from the verified CF Access JWT (currently `subject: "hosted-user"` for all). Code change + config env vars (`CF_ACCESS_ALLOWED_EMAIL`, `CF_ACCESS_AUDIENCE`, `CF_ACCESS_CERTS_URL`, `CF_ACCESS_ISSUER`).
-- **Browser-as-a-reusable-module**: extract the Playwright integration into a standalone browser service (sidecar container with CDP endpoint). smart-fetch connects to it for Tier-3. The user can also connect via Chrome DevTools for debugging. Feature-by-feature evolution: render+extract → screenshot → click+navigate → automation.
+- **Cloudflare Access JWT code verification**: port personal-memory-gateway's `cloudflare-identity.ts` to captatum so the OAuth `subject` comes from the verified CF Access JWT (currently `subject: "hosted-user"` for all). Code change + config env vars (`CF_ACCESS_ALLOWED_EMAIL`, `CF_ACCESS_AUDIENCE`, `CF_ACCESS_CERTS_URL`, `CF_ACCESS_ISSUER`).
+- **Browser-as-a-reusable-module**: extract the Playwright integration into a standalone browser service (sidecar container with CDP endpoint). captatum connects to it for Tier-3. The user can also connect via Chrome DevTools for debugging. Feature-by-feature evolution: render+extract → screenshot → click+navigate → automation.
 - **Tier-2 adapters**: if the e2b wrapper case is important enough, build an Ashby adapter that detects `e2b.dev/careers?ashby_jid=...` → extracts the org alias from the embed script → hits the Ashby API directly (no render needed). Behind the `PlatformAdapter` port (already exists in the code).
 - **Summary accuracy**: verify that the structured-data-in-transform fix works (JSON-LD fields prepended to the content sent to the OpenRouter model). The model should now report correct titles + salaries from the verified fields.
 
@@ -103,7 +103,7 @@ The extractor then runs on this combined HTML. But the title/metadata from the i
 | 1 (revert bypass) | `src/application/use-cases/render.ts` line 22 |
 | 2 (iframe extraction) | `src/infrastructure/render/playwright-renderer.ts` (content capture) + `src/application/use-cases/tier1-extract.ts` (extraction) |
 | 3 (rendered extraction) | `src/infrastructure/extract/html.ts` |
-| 4 (maxBytes) | `src/application/use-cases/smart-fetch-input.ts` (`DEFAULT_SMART_FETCH_DEFAULTS`) |
+| 4 (maxBytes) | `src/application/use-cases/captatum-input.ts` (`DEFAULT_CAPTATUM_DEFAULTS`) |
 | 5 (fixtures) | `docs/test-urls.md` |
 
 ## Test URLs (verified working / failing)
@@ -128,7 +128,7 @@ The extractor then runs on this combined HTML. But the title/metadata from the i
 ## Architecture quick reference
 
 ```
-smart_fetch(url, {prompt?, output?, schema?, budget?, transform?, maxBytes?, timeoutMs?, allowRender?})
+captatum(url, {prompt?, output?, schema?, budget?, transform?, maxBytes?, timeoutMs?, allowRender?})
   0. guardedFetch(url)              ← rebinding-proof SSRF (node:https connect-to-IP)
   1. TIER-1  wreq-js fetch (TLS fingerprint, anti-bot) + raw-HTML extraction
                (JSON-LD / OG / meta / app-state) + shell-gate → done if content present
@@ -142,5 +142,5 @@ smart_fetch(url, {prompt?, output?, schema?, budget?, transform?, maxBytes?, tim
 - Tier-3 render = Playwright Chromium (in the Docker image at `/ms-playwright/`, `chromiumSandbox: false`)
 - Transform router = OpenRouter (dynamic /models discovery, free-first, feedback bandit, fallback chain)
 - OAuth = gateway-owned (ES256 JWT, hashed codes/refresh, family revocation, CF Access on consent path)
-- Storage = TiDB (mysql2, reusing personal-memory-infra's instance, `smartfetch` DB)
+- Storage = TiDB (mysql2, reusing personal-memory-infra's instance, `captatum` DB)
 - Deployment = ECS/Fargate ARM64 + Cloudflare Tunnel + Cloudflare Access

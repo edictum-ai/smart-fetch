@@ -7,9 +7,9 @@ import process from "node:process";
  * and proves stdout is a pure JSON-RPC channel: no pnpm lifecycle banner, no stray
  * log line. The in-memory `smoke-stdio.ts` exercises local server semantics but
  * cannot catch stdout contamination from a script wrapper (e.g. `pnpm run bridge`
- * printing `> smart-fetch@… bridge` to stdout); this one launches the real process.
+ * printing `> captatum@… bridge` to stdout); this one launches the real process.
  *
- * It performs only the protocol handshake + `tools/list` (no smart_fetch call), so
+ * It performs only the protocol handshake + `tools/list` (no captatum call), so
  * it stays hermetic: no network egress, no public fixture. Audit/ready logs must
  * appear on stderr only.
  */
@@ -34,7 +34,7 @@ interface ToolEntry {
 const child = spawn(process.execPath, ["--no-warnings", ENTRY], {
   cwd: process.cwd(),
   stdio: ["pipe", "pipe", "pipe"],
-  env: { ...process.env, SMART_FETCH_FLAVOR: "local-binary" },
+  env: { ...process.env, CAPTATUM_FLAVOR: "local-binary" },
 });
 
 if (!child.stdin || !child.stdout || !child.stderr) {
@@ -144,7 +144,7 @@ async function run(): Promise<ToolEntry> {
     params: {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
-      clientInfo: { name: "smart-fetch-stdio-process-smoke", version: "0.1.0" },
+      clientInfo: { name: "captatum-stdio-process-smoke", version: "0.1.0" },
     },
   });
   await waitForResponse(1);
@@ -154,13 +154,13 @@ async function run(): Promise<ToolEntry> {
 
   const result = list.result as { tools?: ToolEntry[] } | undefined;
   const tools = result?.tools ?? [];
-  const tool = tools.find((entry) => entry.name === "smart_fetch");
+  const tool = tools.find((entry) => entry.name === "captatum");
   if (!tool) {
     const names = tools.map((entry) => entry.name).join(", ") || "none";
-    throw new Error(`tools/list did not advertise smart_fetch over stdio (saw: ${names})`);
+    throw new Error(`tools/list did not advertise captatum over stdio (saw: ${names})`);
   }
   if (tool.inputSchema?.additionalProperties !== false) {
-    throw new Error("stdio smart_fetch inputSchema is not strict (additionalProperties !== false)");
+    throw new Error("stdio captatum inputSchema is not strict (additionalProperties !== false)");
   }
   if (contaminated.length > 0) {
     throw new Error(
@@ -179,11 +179,11 @@ async function run(): Promise<ToolEntry> {
 let exitCode = 0;
 try {
   const tool = await run();
-  console.log("--- smart-fetch local stdio bridge process smoke ---");
+  console.log("--- captatum local stdio bridge process smoke ---");
   console.log(`advertised command: node --no-warnings ${ENTRY}`);
   console.log(`stdout JSON-RPC frames: ${stdoutLines.length} (0 non-protocol lines)`);
   console.log("stdout is a pure JSON-RPC channel: no pnpm banner, no stray logs");
-  console.log(`smart_fetch advertised over stdio with strict schema: ${tool.name === "smart_fetch" ? "yes" : "no"}`);
+  console.log(`captatum advertised over stdio with strict schema: ${tool.name === "captatum" ? "yes" : "no"}`);
   console.log("audit/ready logs observed on stderr only");
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);

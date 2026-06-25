@@ -65,7 +65,7 @@ not concretes.
 ## Adaptive pipeline
 
 ```text
-smart_fetch(url, { prompt?, output?, schema?, budget?, transform?, maxBytes?, timeoutMs?, allowRender? })
+captatum(url, { prompt?, output?, schema?, budget?, transform?, maxBytes?, timeoutMs?, allowRender? })
   0. guardedFetch(url)                 ← the ONLY egress primitive (rebinding-proof SSRF)
   1. TIER-1  wreq-js fetch (TLS fingerprint, anti-bot) + raw-HTML/JSON-LD extraction + shell-gate
   2. TIER-2  [optional] platform adapter short-circuit (clean JSON via public API)
@@ -90,7 +90,7 @@ smart_fetch(url, { prompt?, output?, schema?, budget?, transform?, maxBytes?, ti
 - **Tier-3** renders with Playwright when Tier-1 finds an empty SPA shell or no
   usable structured data (client-rendered React/Vue/Svelte, JS-only docs/demos,
   anti-bot interstitials, embedded third-party widgets). Gated by `allowRender`
-  (default **false**) so a bare `smart-fetch` never spawns a browser. The
+  (default **false**) so a bare `captatum` never spawns a browser. The
   adapter uses lazy `import('playwright')`, disables Service Workers, blocks
   downloads, closes WebSockets, routes document/script/fetch/XHR/style requests
   through `FetcherPort`, checks blocked body types with the same P1 URL/DNS
@@ -128,8 +128,8 @@ in the text content. Tool calls write metadata-only audit events.
 The local-binary flavor is the **same engine** with a stdio transport instead of
 HTTP — no second implementation. `src/interfaces/mcp/local-server.ts`
 (`createLocalMcpServer`) builds the exact MCP server the hosted `POST /mcp` route
-serves (`createSmartFetchMcpServer` → the same `smart_fetch` tool schema and the
-same P3 `SmartFetchUseCase`), but with single-user local auth resolved through
+serves (`createCaptatumMcpServer` → the same `captatum` tool schema and the
+same P3 `CaptatumUseCase`), but with single-user local auth resolved through
 the existing `RequestAuthorizer` (`flavor: "local-binary"` returns the local
 subject with both scopes; no OAuth secrets, no token verification). It imports no
 hosted-only auth code into the core use case.
@@ -149,7 +149,7 @@ server. Invariants:
 - **stdout is the JSON-RPC channel.** All audit/log output goes to **stderr**.
   The advertised client command is the bare node invocation
   `node --no-warnings src/interfaces/mcp/stdio-bridge.ts`, **not** `pnpm run bridge`:
-  pnpm writes a lifecycle banner (`> smart-fetch@… bridge`) to stdout and would
+  pnpm writes a lifecycle banner (`> captatum@… bridge`) to stdout and would
   corrupt the protocol stream. If a package script is required, silence pnpm with
   `corepack pnpm --silent run bridge`. `src/dev/smoke-stdio-process.ts` launches the
   advertised node command and fails if any stdout line is not valid JSON-RPC.
@@ -164,8 +164,8 @@ lifecycle banner contaminates stdout; use `corepack pnpm --silent run bridge` if
 package script is unavoidable. Build the single-file binary with
 `pnpm run build:binary`, which uses Bun's `--compile` (an **external tool**, not
 an npm dependency). When Bun is unavailable the script exits non-zero with the
-exact `bun build … --compile --outfile dist/smart-fetch` command to run on a
-machine that has Bun, and it never claims success unless `dist/smart-fetch` was
+exact `bun build … --compile --outfile dist/captatum` command to run on a
+machine that has Bun, and it never claims success unless `dist/captatum` was
 actually produced. Packaging caveats: `wreq-js` ships native prebuilts and
 Playwright is a lazy `import('playwright')`, so the compiled binary still relies
 on those runtime assets being resolvable on the host (see `docs/dependency-ledger.md`).

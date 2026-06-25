@@ -6,7 +6,7 @@ import type { FetcherOptions, FetcherPort, FetcherResult } from "../application/
 import { extractHtml } from "../infrastructure/extract/index.ts";
 import { createLocalMcpServer } from "../interfaces/mcp/local-server.ts";
 
-const FIXTURE_TEXT = "smart-fetch shared smoke fixture content.";
+const FIXTURE_TEXT = "captatum shared smoke fixture content.";
 
 class StdioSmokeFetcher implements FetcherPort {
   readonly calls: Array<{ url: string; opts: FetcherOptions }> = [];
@@ -49,17 +49,17 @@ const server = await createLocalMcpServer({
 });
 
 const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-const client = new Client({ name: "smart-fetch-stdio-smoke", version: "0.1.0" });
+const client = new Client({ name: "captatum-stdio-smoke", version: "0.1.0" });
 await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
 
 const tools = await client.listTools();
-const tool = tools.tools.find((entry) => entry.name === "smart_fetch");
+const tool = tools.tools.find((entry) => entry.name === "captatum");
 if (!tool || tool.inputSchema.additionalProperties !== false) {
-  throw new Error("stdio smoke: local bridge did not expose the strict smart_fetch schema");
+  throw new Error("stdio smoke: local bridge did not expose the strict captatum schema");
 }
 
 const call = await client.callTool({
-  name: "smart_fetch",
+  name: "captatum",
   arguments: { url: "https://smoke.test/fixture", output: "raw" },
 });
 await client.close();
@@ -77,7 +77,7 @@ if (!text.startsWith("<!-- captatum ") || !text.includes(FIXTURE_TEXT)) {
 }
 assertContractShape(result);
 
-console.log("--- smart-fetch local stdio bridge smoke ---");
+console.log("--- captatum local stdio bridge smoke ---");
 console.log(text);
 console.log(JSON.stringify({
   schemaVersion: result.schemaVersion,
