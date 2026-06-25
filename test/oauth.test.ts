@@ -81,6 +81,42 @@ test("authorize rejects redirects outside the allowlist without a redirect", asy
   await ctx.app.close();
 });
 
+test("authorize rejects any redirect when the allowlist is the '*' wildcard (OAUTH-1: no allow-all)", async () => {
+  const ctx = await setup(["*"]);
+  const response = await ctx.app.inject({
+    method: "GET",
+    url: "/oauth/authorize",
+    query: {
+      response_type: "code",
+      client_id: "client-1",
+      redirect_uri: REDIRECT,
+      code_challenge: pkceChallenge("verifier-12345678901234567890"),
+      code_challenge_method: "S256",
+    },
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "invalid_redirect_uri");
+  await ctx.app.close();
+});
+
+test("authorize rejects an origin-prefix bypass (good.test.evil.test vs good.test)", async () => {
+  const ctx = await setup(["https://good.test"]);
+  const response = await ctx.app.inject({
+    method: "GET",
+    url: "/oauth/authorize",
+    query: {
+      response_type: "code",
+      client_id: "client-1",
+      redirect_uri: "https://good.test.evil.test/cb",
+      code_challenge: pkceChallenge("verifier-12345678901234567890"),
+      code_challenge_method: "S256",
+    },
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error.code, "invalid_redirect_uri");
+  await ctx.app.close();
+});
+
 test("invalid verifier consumes auth code and prevents later reuse", async () => {
   const ctx = await setup();
   const verifier = "valid-verifier-123456789012345678901234567890123";
@@ -230,12 +266,12 @@ test("scope helpers enforce read versus transform", () => {
   );
 });
 
-async function setup(): Promise<TestContext> {
+async function setup(redirectAllowlist?: string[]): Promise<TestContext> {
   const app = Fastify();
   const clock = new FakeClock(NOW_MS);
   const store = new MemoryStore();
   const audit = new MemoryAudit();
-  const config = hostedConfig();
+  const config = hostedConfig(redirectAllowlist);
   await registerOAuthRoutes(app, { config, store, clock, audit });
   return { app, clock, store, audit, config };
 }
@@ -296,14 +332,14 @@ async function postForm(ctx: TestContext, url: string, body: Record<string, stri
   });
 }
 
-function hostedConfig(): HostedOAuthConfig {
+function hostedConfig(redirectAllowlist: string[] = [REDIRECT]): HostedOAuthConfig {
   return {
     issuer: "https://captatum.test",
     resource: "https://captatum.test/mcp",
     consentSigningSecret: "test-consent-secret-with-enough-entropy",
     signingPrivateJwk: testPrivateJwk(),
     signingKeyId: "test-key-1",
-    redirectAllowlist: [REDIRECT],
+    redirectAllowlist,
     accessTokenTtlSeconds: 600,
     refreshTokenTtlSeconds: 2_592_000,
     consentTokenTtlSeconds: 300,

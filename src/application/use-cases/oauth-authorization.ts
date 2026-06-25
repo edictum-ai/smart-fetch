@@ -117,19 +117,32 @@ export class OAuthAuthorizationUseCase {
   }
 
   private allowedRedirect(value: string): string {
-    let normalized: string;
+    let url: URL;
     try {
-      const url = new URL(value);
-      url.hash = "";
-      normalized = url.href;
+      url = new URL(value);
     } catch {
       throw new OAuthError("invalid_redirect_uri", "redirect_uri is invalid");
     }
-    if (this.config.redirectAllowlist.includes("*")) {
-      // global wildcard: allow all
-    } else if (!this.config.redirectAllowlist.some((e) => (e.endsWith("*") ? normalized.startsWith(e.slice(0, -1)) : e === normalized))) {
-      throw new OAuthError("invalid_redirect_uri", "redirect_uri is not allowed");
+    if (url.username || url.password) {
+      throw new OAuthError("invalid_redirect_uri", "redirect_uri must not contain userinfo");
     }
+    url.hash = "";
+    const normalized = url.href;
+    const origin = `${url.protocol}//${url.host}`;
+    // OAUTH-1/CONFIG-3: no allow-all ("*") and no unanchored prefix match — both
+    // enabled open-redirect -> auth-code exfiltration. An entry matches only if it
+    // is the exact redirect_uri, or an exact ORIGIN (scheme://host[:port], no path).
+    const ok = this.config.redirectAllowlist.some((entry) => {
+      if (entry === "*") return false;
+      if (entry === normalized) return true;
+      try {
+        const e = new URL(entry);
+        return (!e.pathname || e.pathname === "/") && !e.search && `${e.protocol}//${e.host}` === origin;
+      } catch {
+        return false;
+      }
+    });
+    if (!ok) throw new OAuthError("invalid_redirect_uri", "redirect_uri is not allowed");
     return normalized;
   }
 
