@@ -85,6 +85,12 @@ export const config = {
     password: () => envString("TIDB_PASSWORD", ""),
     sslCa: () => envString("TIDB_SSL_CA", ""),
   },
+  store: {
+    /** Default hosted OAuth-state store when no TIDB_HOST is set: a single SQLite
+     *  file (node:sqlite, no server). Parent dir is created at boot. TiDB remains
+     *  the optional scale path — set TIDB_HOST to select it. */
+    sqlitePath: () => envString("CAPTATUM_SQLITE_PATH", "./data/captatum.sqlite"),
+  },
 };
 
 function envString(name: string, fallback: string): string {

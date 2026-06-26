@@ -169,10 +169,11 @@ detector); captcha/challenge pages currently fall to `"login"` or `"none"`.
 - **`FetcherPort`** — the single hardened egress. `fetchGuarded(url, opts) → { status, finalUrl, redirects, bodyStream, contentType, bytes } | RejectResult`. Every outbound request (Tier-1, Tier-2 adapter, every redirect hop, every Tier-3 in-browser request) routes through it.
 - **`PlatformAdapter`** — `{ id, detect(ctx): DetectResult | null, resolve(input, fetcher): Promise<ResolveResult> }`. Registered in `src/application/adapters.ts`. Optional general-purpose extension point: adding a platform = one folder under `src/infrastructure/<platform>/` + one registry line + one fixture. Not part of the public contract.
 - **`StorePort`** — OAuth state only: auth-code records and refresh-token records
-  (hashed), plus `close()`. Implemented by `src/infrastructure/tidb/` over
-  `mysql2` for the hosted flavor. A `node:sqlite` implementation is also
-  shipped and tested for local/dev OAuth-state use, but the current local stdio
-  bridge has no OAuth and does not open a store.
+  (hashed), plus `close()`. The hosted flavor uses the `node:sqlite` impl
+  (`src/infrastructure/sqlite/`, a single file — the DEFAULT) or, when
+  `TIDB_HOST` is set, the `mysql2` impl (`src/infrastructure/tidb/`). Selection
+  lives in `src/infrastructure/store-selection.ts`. The local stdio bridge has no
+  OAuth and opens no store.
 - **`ModelRouterPort`** — `pick(task, inputTokens, options?): { provider, model?, free?, reason? }` + `feedback(model, score)` for the deterministic feedback EMA. `options.localOnly` is used for sensitive-content signals so hosted providers are bypassed. Implemented by `src/infrastructure/llm/model-router.ts`.
 
 ## Tiers
@@ -268,14 +269,19 @@ Scopes: `fetch:read` (default), `fetch:transform` (to use the Transform stage). 
 
 OAuth state only (auth codes + refresh tokens, hashed), behind a swappable
 `StorePort`:
-- **Hosted flavor → TiDB** via `mysql2`, configured with
-  `TIDB_HOST/PORT/DATABASE/USER/PASSWORD`. The code ships the TiDB store and
+- **Hosted flavor → SQLite (DEFAULT)** via `node:sqlite` — a single file on disk,
+  no server. Configured with `CAPTATUM_SQLITE_PATH` (default
+  `./data/captatum.sqlite`; the parent dir is created at boot). The hosted flavor
+  boots with SQLite when no `TIDB_HOST` is set, so one-click deploys (Railway /
+  EC2 / Mac Mini) need no external database. Selection (`chooseStoreBackend`) and
+  the TLS gate live in `src/infrastructure/store-selection.ts`.
+- **Hosted flavor → TiDB (optional scale path)** via `mysql2`, opted into by
+  setting `TIDB_HOST/PORT/DATABASE/USER/PASSWORD` (+ `TIDB_SSL_CA`; TLS required
+  regardless of `NODE_ENV`, SQLSTORE-1). The code ships the TiDB store and
   migrations; provisioning the `captatum` database/user/security-group rule is
-  deployment work outside this repo slice. No fetched content/body/cache rows are
-  stored.
-- **SQLite implementation → `node:sqlite`** (file on disk, no server) is shipped
-  and tested for local/dev OAuth-state use. The current local stdio bridge has no
-  OAuth, so it does not use this store at runtime.
+  deployment work outside this repo slice.
+- No fetched content/body/cache rows are stored; the service is stateless
+  otherwise.
 
 Tables: `oauth_auth_codes` (code hash, client id, subject, redirect URI, resource, scopes JSON, PKCE challenge, expiry), `oauth_refresh_tokens` (token hash, family id, previous token hash, client id, subject, scopes JSON, expiry, consumed timestamp), and `oauth_refresh_token_families` (family id, revoked timestamp). Auth codes are deleted on first consume whether valid or expired. Refresh rotation atomically marks the old token consumed and inserts the next hashed token; replay of a consumed token revokes the whole family. Expiry checks use caller-supplied UTC ISO timestamps. No raw codes/tokens and no fetched content/body/cache rows are stored — the service is stateless otherwise. Schema via SQL migrations (per flavor).
 
