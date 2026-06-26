@@ -68,44 +68,45 @@ Agents need to read the web — docs, job postings, product pages, articles. The
 - **Node.js 24+** (uses `node:sqlite` and native `wreq-js` prebuilts).
 - **pnpm 10.32.0+** via corepack (`corepack enable`).
 
-## Quick start (local stdio)
+## Quick start (local)
 
-Captatum runs the **same engine** in two shapes. For local development or a single agent, use the **local stdio bridge** — no auth, no network listener:
+The fastest local path is the published package — one line, no clone, no build (Node 24+):
 
 ```sh
-corepack enable
-corepack pnpm install
-node --no-warnings src/interfaces/mcp/stdio-bridge.ts   # stdio MCP server on stdout
+npx -y captatum        # runs the local stdio MCP server
 ```
+
+Add it to your MCP client config and you're set (see [Connect your client](#connect-your-client)). No auth, no network listener — the client owns the process; `stdin`/`stdout` are the JSON-RPC channel.
 
 **First call — pick one:**
-- **Zero-config:** call with `output: "raw"` to get clean content + structured data, no LLM, no key.
-- **Default summary:** set `OPENROUTER_API_KEY` (free models available) **or** run [Ollama](https://ollama.com) and set `OLLAMA_BASE_URL`. Without one, `summary` falls back to `raw`.
+- **Zero-config:** call with `output: "raw"` (clean content + structured data, no LLM, no key).
+- **Default summary:** set `OPENROUTER_API_KEY` (free models available) **or** run [Ollama](https://ollama.com) and set `OLLAMA_BASE_URL`. Without one, `summary` honestly falls back to `raw`.
 
-Build integrity check (not a tool-call test):
-
-```sh
-corepack pnpm run check          # syntax + 250-line limit + typecheck
-node --test test/*.test.ts       # unit suite (no browser/network needed)
-```
+_From source (development):_ `corepack pnpm install && node --no-warnings src/interfaces/mcp/stdio-bridge.ts`. Build integrity: `corepack pnpm run check` + `node --test test/*.test.ts`.
 
 ## Connect your client
 
 **Hosted (recommended for most)** — self-host (see [Deploy](#deploy-hosted)) and point your client at `https://<your-host>/mcp` as a remote Streamable-HTTP MCP server. No local install; reachable from claude.ai / ChatGPT / Cursor. **Scopes:** `fetch:read` (the OAuth default) only allows `output: raw`; the default `summary`/`extract`/`transform` require the **`fetch:transform`** scope — request it in your connector config or the headline feature 403s on the first call. Cloudflare Access guards only `/oauth/authorize`; `/mcp` and `/oauth/token` use the gateway's OAuth bearer tokens (no interactive SSO for MCP clients).
 
-**Local single-user** — build the self-contained binary once, then the client config is just the binary (no Node, no repo, no source path):
-
-```sh
-corepack pnpm run build:binary      # Bun --compile → ./captatum (one executable)
-```
+**Local single-user** — add the published package to your MCP client config (Node 24+):
 
 ```jsonc
-{ "mcpServers": { "captatum": { "command": "/absolute/path/to/captatum" } } }
+{
+  "mcpServers": {
+    "captatum": {
+      "command": "npx",
+      "args": ["-y", "captatum"],
+      "env": { "OPENROUTER_API_KEY": "sk-or-v1-…" }   // optional; omit for raw-only
+    }
+  }
+}
 ```
 
-> The local binary has **no auth** — single-user, loopback only; never expose it on a network.
+(For Claude Code: `claude mcp add captatum -- npx -y captatum`. For a no-cloud-egress setup, swap the env for `OLLAMA_BASE_URL=http://localhost:11434`.)
+
+> The local server has **no auth** — single-user, loopback only; never expose it on a network. It opens **no listener** (stdio only), so it's strictly safer than even a loopback HTTP server.
 >
-> _Dev only (no binary):_ `{"command":"node","args":["--no-warnings","src/interfaces/mcp/stdio-bridge.ts"]}` — and never wrap it in `pnpm run bridge` (pnpm's lifecycle banner corrupts the JSON-RPC stream; use `corepack pnpm --silent run bridge` if you need a script).
+> _From source (dev):_ `{"command":"node","args":["--no-warnings","src/interfaces/mcp/stdio-bridge.ts"]}` — never wrap in `pnpm run bridge` (the pnpm lifecycle banner corrupts the JSON-RPC stream; use `corepack pnpm --silent run bridge` if you need a script).
 
 ## The `captatum` tool
 
