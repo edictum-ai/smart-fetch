@@ -1,6 +1,6 @@
 {
   "name": "@edictum/captatum",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "description": "Captatum — adaptive MCP web-fetch tool for AI agents: fetch any URL, render JS when needed, return clean structured content + provenance.",
   "license": "MIT",
@@ -16,7 +16,7 @@
   },
   "files": [
     "bin",
-    "src",
+    "dist",
     "package.json",
     "README.md",
     "LICENSE",
@@ -35,6 +35,7 @@
     "check:syntax": "find src -name '*.ts' -print0 | xargs -0 -n1 node --check",
     "check:lines": "node --no-warnings src/dev/check-line-limits.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "server": "node --no-warnings src/server.ts",
     "bridge": "node --no-warnings src/interfaces/mcp/stdio-bridge.ts",
     "build:binary": "bash scripts/build-binary.sh",
