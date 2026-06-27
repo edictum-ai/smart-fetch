@@ -101,4 +101,5 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run build        # compile src/*.ts → dist/*.js (Node won't type-strip .ts in node_modules)
       - run: npm publish --access public --provenance
