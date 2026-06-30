@@ -25,12 +25,14 @@ brand-new user. Two options:
 - **limactl** (preferred — a real isolated VM):
   ```sh
   limactl start --name=captatum-clean --tty=false template://default
-  limactl exec captatum-clean -- sh -c 'command -v node || brew install node@24'   # Node 24+
-  limactl exec captatum-clean -- sh -c 'npx -y @edictum/captatum </dev/null 2>&1 | tail -6'
+  # Lima's default guest is Ubuntu (no Homebrew) — install Node 24 via NodeSource:
+  limactl exec captatum-clean -- sh -c 'command -v node || (curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash - && sudo apt-get install -y nodejs)'
+  # set -o pipefail so a failed `npx` (broken publish / native-module error) is not masked by `tail`:
+  limactl exec captatum-clean -- sh -c 'set -o pipefail; npx -y @edictum/captatum </dev/null 2>&1 | tail -6'
   ```
 - **Docker** (lighter — a clean container, same install/DX signal):
   ```sh
-  docker run --rm node:24 sh -c 'node -v && (npx -y @edictum/captatum </dev/null 2>&1 | tail -6); echo EXIT=$?'
+  docker run --rm node:24 sh -c 'node -v && (set -o pipefail; npx -y @edictum/captatum </dev/null 2>&1 | tail -6); echo EXIT=$?'
   ```
 
 A `</dev/null` on stdin makes the stdio bridge start, print its ready line, and exit —

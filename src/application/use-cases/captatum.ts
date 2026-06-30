@@ -12,7 +12,7 @@ import {
 import { maybeRender } from "./render.ts";
 import { resolveAshbyEmbedUrl } from "../../infrastructure/ashby/embed-resolver.ts";
 import { fallbackExcerpt } from "./result-excerpt.ts";
-import { transformContent } from "./transform-content.ts";
+import { stripAdTrackerUrlsForLlm, transformContent } from "./transform-content.ts";
 import {
   DEFAULT_CAPTATUM_DEFAULTS,
   normalizeCaptatumInput,
@@ -133,10 +133,12 @@ export class CaptatumUseCase {
     let transformed: TransformResult;
     let transformMs = 0;
     try {
+      const scanContent = transformContent(base);
       transformed = await this.transformer.transform({
         mode: request.requestedOutput === "extract" ? "extract" : "summarize",
         output: request.requestedOutput,
-        content: transformContent(base),
+        content: stripAdTrackerUrlsForLlm(scanContent, base),
+        scanContent,
         prompt: request.prompt,
         sourceUrl: base.finalUrl,
         schema: request.schema,

@@ -27,8 +27,15 @@ export function transformContent(base: Result): string {
     ? `\n\n--- Verified structured data (JSON-LD) — prefer these fields ---\n${JSON.stringify(stripped, null, 2)}`
     : "";
   const preamble = meta.length > 0 ? `${meta.join("\n")}\n\n` : "";
-  const pageHost = hostOf(base.finalUrl ?? base.url ?? "");
-  return stripAdTrackerUrls(`${preamble}${base.result}${jsonLd}`, pageHost);
+  return `${preamble}${base.result}${jsonLd}`;
+}
+
+/** Strip ad/tracker URL literals from the LLM-bound content (token reduction ONLY).
+ *  The safety scan sees the PRE-strip content — full URLs incl. any credentials
+ *  sitting in a tracker's query string — so stripping can never orphan a credential
+ *  param (`…&access_token=…`) and bypass the sensitive-content gate (codex P1 #46). */
+export function stripAdTrackerUrlsForLlm(content: string, base: Result): string {
+  return stripAdTrackerUrls(content, hostOf(base.finalUrl ?? base.url ?? ""));
 }
 
 /**

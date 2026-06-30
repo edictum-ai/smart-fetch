@@ -483,6 +483,14 @@ test("HTML-escaped &amp; signed-URL separators are normalized before the key che
   assert.match(escaped.reason ?? "", /content_embedded_.*signed_or_tokenized/);
 });
 
+test("a JWT present only in the source url is flagged (codex P2 on #47)", () => {
+  // With the path-token heuristic removed (#47), a credential VALUE sitting only in
+  // the source url (not echoed in the body) must still be caught.
+  const r = detectSensitiveTransformInput({ content: "plain body, no credential", sourceUrl: "https://files.example.com/d/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig12345678" });
+  assert.equal(r.sensitive, true);
+  assert.equal(r.reason, "source_credential_signal");
+});
+
 class FakeClock implements ClockPort {
   private index = 0;
   private readonly ticks: number[];

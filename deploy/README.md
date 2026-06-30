@@ -62,7 +62,7 @@ The hosted flavor **requires Cloudflare Access** (it fail-closes at boot without
 
 | Target | Guide | Notes |
 | --- | --- | --- |
-| **Railway** | [`railway.md`](./railway.md) + `railway.toml` | One gateway service from the published image + a `/data` volume; add a second service for the browser sidecar if you need Tier-3 at scale. |
+| **Railway** | [`railway.md`](./railway.md) + `railway.toml` | One gateway service from the published image + a `/data` volume. **Tier-3 needs the browser sidecar in the gateway's network namespace** (CDP is loopback-only) — so on Railway run gateway + sidecar in ONE service, not a separate one (a second service can't reach `127.0.0.1:9222`). |
 | **EC2** | [`ec2-user-data.sh`](./ec2-user-data.sh) | cloud-init: installs Docker and runs `docker compose up -d` with the gateway + sidecar. |
 | **Mac Mini** | [`mac-mini.md`](./mac-mini.md) | `cloudflared` + `docker compose` on macOS. |
 
