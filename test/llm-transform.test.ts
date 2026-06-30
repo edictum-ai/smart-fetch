@@ -412,8 +412,8 @@ test("detectSensitiveTransformInput does NOT flag ad/CDN URLs with generic signi
   // estadao.com.br-style ad tracker carrying generic ?token=/?key= — not credentials.
   const ad = detectSensitiveTransformInput({ content: "Continue lendo https://ad.doubleclick.net/ddm/track/?token=AfKj9x&key=12345 corpo do artigo." });
   assert.equal(ad.sensitive, false);
-  // md5 (32-char) and sha1 (40-char) hex CDN asset hashes in the path — rejected
-  // by length and by the pure-hex rule; never treated as tokens.
+  // md5 (32-char) and sha1 (40-char) hex CDN asset hashes in the path — never
+  // flagged now that the path-token heuristic is gone (no length/alphabet rule).
   const md5 = detectSensitiveTransformInput({ content: "Foto https://img.example.com/cdn/f7a3b9c2e1d4a6b8f0c3e5d7a9b1c3e5.jpg" });
   assert.equal(md5.sensitive, false);
   const sha1 = detectSensitiveTransformInput({ content: "https://img.example.com/d/f7a3b9c2e1d4a6b8f0c3e5d7a9b1c3e5f7a3b9c2.js" });
@@ -443,15 +443,24 @@ test("a signed/tokenized SOURCE url is flagged even with generic keys (source ke
   assert.match(r.reason ?? "", /signed_or_tokenized_url/);
 });
 
-test("a letter-rich opaque path token (share-id / non-JWT) is flagged; a long numeric ID is not", () => {
-  // 43-char mixed-case+digits opaque token (NOT hex, not a JWT) → flagged as a token.
-  const token = "aB3dE6fH9jK2mN4pQ7sT1vW0xY3zA6bC9dE2fG5hI8k";
-  const flagged = detectSensitiveTransformInput({ content: `https://files.example.com/d/${token}` });
-  assert.equal(flagged.sensitive, true);
-  assert.match(flagged.reason ?? "", /content_embedded_.*signed_or_tokenized/);
-  // 55-digit pure-decimal catalog/DB PK → NOT a token.
-  const numeric = detectSensitiveTransformInput({ content: "https://catalog.example.com/item/1234567890123456789012345678901234567890123456789012345" });
-  assert.equal(numeric.sensitive, false);
+test("long URL path segments (news-article slugs, opaque IDs) are NOT flagged — path-token heuristic removed (#44)", () => {
+  // The path-segment token heuristic was removed: no length/alphabet rule can
+  // separate a real opaque token from a long news-article slug, so it caused a
+  // deterministic false-positive on every article with a long slug (the source URL
+  // is scanned, and `brasil-japao-ao-vivo-copa-do-mundo-2026-06-29` matched).
+  const slug = detectSensitiveTransformInput({ content: "body", sourceUrl: "https://www.estadao.com.br/esportes/futebol/brasil-japao-ao-vivo-copa-do-mundo-2026-06-29/" });
+  assert.equal(slug.sensitive, false);
+  const longId = detectSensitiveTransformInput({ content: "https://catalog.example.com/item/1234567890123456789012345678901234567890123456789012345" });
+  assert.equal(longId.sensitive, false);
+  // A letter-rich opaque-looking token in the path is INTENTIONALLY not flagged
+  // (the heuristic that used to catch it also caught news slugs). A real JWT in a
+  // path is still caught by the credential-value pattern (asserted below).
+  const opaque = detectSensitiveTransformInput({ content: `https://files.example.com/d/aB3dE6fH9jK2mN4pQ7sT1vW0xY3zA6bC9dE2fG5hI8k` });
+  assert.equal(opaque.sensitive, false);
+  // Real path-embedded credentials are still caught by the credential-value
+  // patterns (JWT), the query-key check (presigned URLs), or internalHostReason.
+  const jwt = detectSensitiveTransformInput({ content: "https://files.example.com/d/eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.sig12345678" });
+  assert.equal(jwt.sensitive, true);
 });
 
 test("header dumps match any case (codex SF-1) — lowercase/all-caps Authorization/Set-Cookie", () => {

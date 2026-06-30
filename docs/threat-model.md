@@ -164,11 +164,15 @@ were mis-flagged, which skipped the transform and silently dumped raw):
   checks all keys (these included): fetching a tokenized url is itself suspicious.
   (`sig`/`signature`/`access_token` are real credentials and stay flagged in content
   — an early #44 draft over-narrowed this; corrected after adversarial review.)
-- Path-segment token heuristic — only segments ≥40 chars that are letter-rich
-  (mixed base64url alphabet) are treated as opaque tokens (JWT-in-path, share-id,
-  presigned signature). Pure-hex segments (md5/sha1/sha256 asset hashes) and
-  pure-decimal segments (DB/catalog IDs) are rejected, so hashes/IDs do not
-  false-positive.
+- No path-segment "opaque token" heuristic — it was removed (the second #44
+  regression). No length/alphabet rule can reliably separate a real opaque token
+  from a long news-article slug (`brasil-japao-ao-vivo-copa-do-mundo-2026-06-29`)
+  or a CDN hash, so it caused deterministic false-positives on public articles
+  (the source URL is scanned, and the article's own slug matched). Real
+  path-embedded credentials are still caught: JWTs by the credential-value
+  patterns, presigned URLs by the query-key check, internal hosts by
+  internalHostReason. The lost coverage (a non-JWT opaque share-token in a URL
+  path) is rare and low-risk (fetching a share URL is user-intentional).
 - Large content — there is no longer a fail-closed `content_exceeds_scan_cap`. The
   credential/header patterns scan the FULL content; only the embedded-url scan is
   capped at the first 500 KB (ReDoS/DoS hygiene).

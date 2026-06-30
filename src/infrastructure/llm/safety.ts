@@ -140,37 +140,15 @@ function signedUrlReason(sourceUrl: string, keys: Set<string> = SIGNED_QUERY_KEY
   for (const key of parsed.searchParams.keys()) {
     if (keys.has(key.toLowerCase())) return "signed_or_tokenized_url";
   }
-  // TRANSFORM-4: also detect high-entropy path segments (CDN/JWT-in-path tokens).
-  const segments = parsed.pathname.split("/").filter(Boolean);
-  for (const seg of segments) {
-    if (looksLikeToken(seg)) return "signed_or_tokenized_url";
-  }
+  // NOTE: a path-segment "opaque token" heuristic used to run here but was removed
+  // (#44) — no length/alphabet rule reliably separates a real opaque token from a
+  // long news-article slug (e.g. `brasil-japao-ao-vivo-copa-do-mundo-2026-06-29`)
+  // or a CDN asset hash, so it caused repeated false-positives on public pages,
+  // deterministically on any article with a long slug. Real path-embedded
+  // credentials are still caught elsewhere: JWTs by the credential-value patterns
+  // above, presigned URLs by the query-key check, internal hosts by
+  // internalHostReason. See docs/threat-model.md "Sensitive-content detection".
   return undefined;
-}
-
-/** Min path-segment length to consider it a token. Real opaque tokens (JWT
- *  segments, AWS signatures, share-link IDs) are ≥40 chars; shorter segments are
- *  almost always slugs/short-IDs. CDN hashes (md5/sha1/sha256) are rejected by
- *  looksLikeToken's alphabet check below, not by length, so 40 is safe here. */
-const MIN_TOKEN_SEGMENT_LEN = 40;
-
-/** Heuristic: does a path segment look like an opaque credential token (JWT-in-
- *  path, presigned signature, share-link) vs ordinary content? A real token
- *  carries entropy across the FULL base64url alphabet (mixed case + digits), NOT
- *  just hex or decimal. So pure-hex asset hashes and pure-decimal IDs are
- *  rejected outright, and a letter-rich mix is required (JWT/opaque tokens are
- *  letter-dominant — this also catches letter-heavy tokens a digit-ratio rule
- *  would miss). */
-function looksLikeToken(seg: string): boolean {
-  if (seg.length < MIN_TOKEN_SEGMENT_LEN) return false;
-  if (!/^[A-Za-z0-9_.-]+$/.test(seg)) return false;
-  // Evaluate the STEM: drop a trailing short extension (.js/.jpg/.css/…) so an
-  // asset filename like `<sha1>.js` is judged on its hash core, not the full name.
-  const stem = seg.replace(/\.[A-Za-z0-9]{1,5}$/, "");
-  if (/^[0-9a-f]+$/i.test(stem)) return false; // pure hex → md5/sha1/sha256 asset hash
-  if (/^[0-9]+$/.test(stem)) return false;     // pure decimal → DB PK / catalog ID
-  const letters = (stem.match(/[A-Za-z]/g) ?? []).length;
-  return letters >= stem.length * 0.20;
 }
 
 function internalHostReason(sourceUrl: string): string | undefined {
