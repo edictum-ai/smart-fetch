@@ -105,6 +105,15 @@ export function detectSensitiveTransformInput(input: {
     : undefined;
   if (urlReason) return { sensitive: true, reason: urlReason };
 
+  // A credential VALUE in the source url (e.g. a JWT in the path) is flagged too.
+  // The path-token heuristic is gone (#47), so without this a JWT present only in
+  // the source url — not echoed in the body — would slip past (codex P2 on #47).
+  if (input.sourceUrl) {
+    for (const pattern of SENSITIVE_CREDENTIAL_PATTERNS) {
+      if (pattern.test(input.sourceUrl)) return { sensitive: true, reason: "source_credential_signal" };
+    }
+  }
+
   const content = input.content ?? "";
   for (const pattern of SENSITIVE_CREDENTIAL_PATTERNS) {
     if (pattern.test(content)) return { sensitive: true, reason: "content_credential_signal" };

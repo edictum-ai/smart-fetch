@@ -71,7 +71,10 @@ export class LlmTransformer implements TransformPort {
     const override = overrideProvider(input.transform?.provider);
     if (override === "unsupported") return rawFallback(input.content, "unsupported_provider");
 
-    const sensitive = detectSensitiveTransformInput(input);
+    const sensitive = detectSensitiveTransformInput({
+      content: input.scanContent ?? input.content,
+      ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+    });
     const baseOptions: ModelPickOptions = {
       provider: sensitive.sensitive ? undefined : override,
       model: typeof input.transform?.model === "string" ? input.transform.model : undefined,

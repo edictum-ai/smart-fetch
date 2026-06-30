@@ -12,6 +12,10 @@ export interface TransformInput {
   mode: TransformMode;
   output: Extract<Output, "summary" | "extract">;
   content: string;
+  /** Content used for the sensitive-content scan (defaults to `content`). The
+   *  orchestrator passes the PRE-ad-strip content here so the strip — an LLM-input
+   *  optimization — can never affect the security gate (codex P1 on #46). */
+  scanContent?: string;
   prompt: string;
   sourceUrl?: string;
   schema?: unknown;

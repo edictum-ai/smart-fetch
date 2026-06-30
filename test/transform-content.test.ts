@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { transformContent } from "../src/application/use-cases/transform-content.ts";
+import { stripAdTrackerUrlsForLlm, transformContent } from "../src/application/use-cases/transform-content.ts";
+import { detectSensitiveTransformInput } from "../src/infrastructure/llm/safety.ts";
 import type { Result } from "../src/domain/result.ts";
 
 function bare(over: Partial<Result>): Result {
@@ -66,7 +67,7 @@ test("transformContent strips ad/tracker URLs (token reduction) but keeps real c
     "Continue lendo https://www.google-analytics.com/collect?v=1&tid=UA-1234&t=pageview",
     "Sponsored https://taboola.com/2x/redirect?pkg=abc",
   ].join("\n");
-  const c = transformContent(bare({
+  const base = bare({
     title: "Reforma será votada",
     result: adHeavy,
     finalUrl: "https://estadao.com.br/politica/reforma",
@@ -79,7 +80,9 @@ test("transformContent strips ad/tracker URLs (token reduction) but keeps real c
         publisher: { logo: "https://doubleclick.net/logo.png" }, // ad tracker — STRIPPED
       },
     },
-  }));
+  });
+  // transformContent is PRE-strip; stripAdTrackerUrlsForLlm is the LLM-bound view.
+  const c = stripAdTrackerUrlsForLlm(transformContent(base), base);
   // Real article content survives.
   assert.ok(c.includes("O ministro afirmou ontem que a reforma será votada."), "article body kept");
   assert.ok(c.includes("Reforma será votada"), "headline kept");
@@ -105,7 +108,7 @@ test("transformContent strips ad/tracker URLs (token reduction) but keeps real c
 });
 
 test("stripAdTrackerUrls does not over-strip a legit URL comma/ampersand-adjacent to a tracker (review fix)", () => {
-  const c = transformContent(bare({
+  const base = bare({
     result: [
       "Links:",
       "https://doubleclick.net/ad1,https://estadao.com.br/real-article",
@@ -113,7 +116,8 @@ test("stripAdTrackerUrls does not over-strip a legit URL comma/ampersand-adjacen
       "https://doubleclick.net:8080/x",          // explicit port — still matched by name
       "https://u:p@googletagmanager.com/gtm.js", // userinfo — host still matched
     ].join("\n"),
-  }));
+  });
+  const c = stripAdTrackerUrlsForLlm(transformContent(base), base);
   assert.ok(!c.includes("doubleclick.net"), "tracker URLs stripped (incl. with port)");
   assert.ok(!c.includes("googletagmanager.com"), "tracker with userinfo stripped");
   // Legit first-party URLs are NOT swallowed by greedy adjacency matching.
@@ -122,7 +126,7 @@ test("stripAdTrackerUrls does not over-strip a legit URL comma/ampersand-adjacen
 });
 
 test("stripAdTrackerUrls preserves first-party URLs when a vendor apex IS the fetched page (codex SF-4)", () => {
-  const c = transformContent(bare({
+  const base = bare({
     url: "https://amplitude.com/",
     finalUrl: "https://amplitude.com/product",
     result: [
@@ -130,7 +134,8 @@ test("stripAdTrackerUrls preserves first-party URLs when a vendor apex IS the fe
       "See https://amplitude.com/pricing and https://www.amplitude.com/docs.",
       "Trackers: https://doubleclick.net/ad https://googletagmanager.com/gtm.js",
     ].join("\n"),
-  }));
+  });
+  const c = stripAdTrackerUrlsForLlm(transformContent(base), base);
   // First-party (the fetched page's own apex + subdomains) survive even though
   // amplitude.com is in the adblock list.
   assert.ok(c.includes("https://amplitude.com/pricing"), "first-party page URL preserved");
@@ -138,6 +143,20 @@ test("stripAdTrackerUrls preserves first-party URLs when a vendor apex IS the fe
   // Third-party trackers are still stripped.
   assert.ok(!c.includes("doubleclick.net"), "third-party tracker stripped");
   assert.ok(!c.includes("googletagmanager.com"), "third-party tracker stripped");
+});
+
+test("P1 (#46): a credential in a tracker query string is caught — scan sees pre-strip content, strip is LLM-only", () => {
+  // The bug: the ad-strip truncated tracker URLs at `&`, orphaning `&access_token=…`
+  // as bare text the scanner can't see as a URL → credential bypassed local-only
+  // routing. Fix: the scan runs on PRE-strip content (full URL intact).
+  const base = bare({ result: "See https://doubleclick.net/collect?foo=1&access_token=ya29.a0AfH6SECRET" });
+  const pre = transformContent(base); // PRE-strip — what the safety scan now sees
+  assert.ok(pre.includes("access_token=ya29.a0AfH6SECRET"), "pre-strip content keeps the credential param");
+  assert.equal(detectSensitiveTransformInput({ content: pre }).sensitive, true, "scan flags the access_token");
+  // The LLM-bound content still strips the tracker host (token reduction) — but
+  // that never affects the scan above.
+  const llm = stripAdTrackerUrlsForLlm(pre, base);
+  assert.ok(!llm.includes("doubleclick.net"), "LLM content strips the tracker host");
 });
 
 
