@@ -1,4 +1,27 @@
-# #41 — HTTPS anti-bot via Tier-3 browser-fetch fallback
+# #41 — HTTPS anti-bot challenge detection (Half A)
+
+> **DECISION (2026-06-30): #41 ships as "Half A" — honest DETECTION only.** Half B
+> (actually bypassing Cloudflare managed challenges via a browser-fetch fallback,
+> described below as the historical design) was researched and is **NOT VIABLE** for
+> captatum: (1) the datacenter-ASN wall — captatum runs on Fargate and Cloudflare
+> auto-flags the AWS ASN before the handshake, so no browser stack helps; (2) the
+> OSS stealth ecosystem is abandoned/broken (FlareSolverr broke in a day, etc.);
+> (3) the only OSS tool that clears it (nodriver) is Python/AGPL, un-adoptable; (4)
+> the one thing that works commercially — a paid residential/mobile proxy pool — is
+> forbidden as a core dep by the OSS-only house rule, and bypass would re-open the
+> audit's #1 SSRF surface (browser must own egress).
+>
+> **Half A (built):** detect the challenge wall (vendor-specific signals only —
+> `cf-mitigated` header or Cloudflare/Akamai/PerimeterX body markers; no generic
+> phrases, no cookie-alone) → stamp `challengeProvider` + an `antibot_challenge`
+> error → `classifyAccess` returns `gateReason: "captcha"` → the orchestrator skips
+> the futile render and never summarizes the interstitial (output raw). Verified on
+> https://www.scrapingcourse.com/cloudflare-challenge. An **opt-in user-supplied
+> proxy/captcha provider** is the documented escape hatch for later, not core.
+
+---
+
+## Historical: the Half B browser-bypass design (researched, dropped)
 
 **Status:** spec (build-time blueprint). Source: 6-agent design + adversarial-security
 workflow + codex review. **Verdict: go-with-changes** — SSRF-safe *if built to the

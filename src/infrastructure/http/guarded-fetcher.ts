@@ -127,12 +127,16 @@ export class GuardedHttpFetcher implements FetcherPort {
   }
 }
 
-/** Vendor cookie prefixes set by anti-bot challenges (#41 detection). */
+/** Vendor cookie prefixes set by anti-bot challenges (#41 detection). These
+ *  cookies (e.g. `__cf_bm`) are also set on ordinary Cloudflare-served pages, so a
+ *  cookie ALONE is NOT a challenge signal — detection requires a vendor-specific
+ *  body marker or `cf-mitigated`. */
 const CHALLENGE_COOKIE = /(?:^|,\s*)(?:__cf_bm|__cf_chl_|datadome|_px|incap_ses|visid_incap|nlbi_)=/i;
-/** Vendor-SPECIFIC body markers (not generic "enable javascript" phrases — these
- *  are Cloudflare/Akamai/PerimeterX challenge-page strings). */
-const CHALLENGE_BODY_MARKERS =
-  /cdn-cgi\/challenge-platform|__cf_chl|cf-browser-verification|Just a moment|akamaighost|_abck|px-captcha|\/_px\//i;
+/** Vendor-SPECIFIC body markers — Cloudflare `cdn-cgi/challenge-platform` /
+ *  `__cf_chl`, Akamai `_abck`, PerimeterX `_px`. NOT generic phrases like "Just a
+ *  moment" (which can appear on a non-challenge page), so an ordinary page does not
+ *  false-positive. Status-independent — a challenge interstitial can be served at 200. */
+const CHALLENGE_BODY_MARKERS = /cdn-cgi\/challenge-platform|__cf_chl|cf-browser-verification|akamaighost|_abck|px-captcha|\/_px\//i;
 
 /** Curated, vendor-attributed anti-bot evidence from the response. All fields are
  *  booleans/enums — the raw attacker-controlled headers/body never leave this

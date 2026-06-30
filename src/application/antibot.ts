@@ -1,10 +1,6 @@
 import type { AntiBotEvidence, FetcherResult } from "./ports/fetcher.ts";
 import type { Result } from "../domain/result.ts";
 
-/** Statuses associated with an anti-bot challenge. A 200 with a challenge body is a
- *  known false-negative this detector does not chase (#41 honest scope). */
-const ANTIBOT_STATUS = new Set([403, 429, 503]);
-
 export interface AntiBotSignal {
   signal: string;
 }
@@ -15,11 +11,13 @@ export interface AntiBotSignal {
  * result is reported as `gated` (`gateReason: "captcha"`) instead of the challenge
  * HTML being silently passed as page content. Returns null otherwise.
  *
- * Requires a VENDOR-ATTRIBUTED signal: `cf-mitigated`, a Cloudflare/Akamai/PX
- * challenge body, or a vendor challenge cookie paired with vendor attribution
- * (`server`/`cf-ray`). NOT a forgeable `Server: cloudflare` header alone, and NOT
- * a generic "enable javascript" body phrase. So an ordinary 403 (auth wall), 503
- * (service unavailable), or empty 4xx is NOT flagged as a challenge.
+ * Fires ONLY on vendor-SPECIFIC signals: the `cf-mitigated` header, or a body
+ * marker unique to a challenge page (Cloudflare `cdn-cgi/challenge-platform` /
+ * `__cf_chl`, Akamai `_abck`, PerimeterX `_px`). These are status-INDEPENDENT (a
+ * challenge interstitial can be served at 200) and do NOT include generic phrases
+ * ("Just a moment") or cookies alone (`__cf_bm` is set on ordinary Cloudflare-served
+ * pages) — so an ordinary Cloudflare-fronted 403/503, an auth wall, or an empty 4xx
+ * is NOT flagged (no #44-class false-positive).
  *
  * NOTE (#41 Half B, not built): actually *bypassing* the challenge is not viable
  * for captatum — see docs/specs/issue-41-design.md + the evasion research
@@ -27,14 +25,9 @@ export interface AntiBotSignal {
  */
 export function detectAntibotBlock(fetched: FetcherResult): AntiBotSignal | null {
   const e = fetched.antibot;
-  if (!e || !ANTIBOT_STATUS.has(e.status)) return null;
-  // Strong, vendor-attributed body/header signals:
+  if (!e) return null;
   if (e.hasCfMitigated) return { signal: "cf-mitigated" };
   if (e.hasChallengeBody) return { signal: "challenge-body" };
-  // Vendor cookie requires vendor attribution (a bare cookie is not enough):
-  if (e.hasChallengeCookie && (e.hasCfRay || e.serverVendor !== "none")) {
-    return { signal: `${e.serverVendor}-challenge-cookie` };
-  }
   return null;
 }
 

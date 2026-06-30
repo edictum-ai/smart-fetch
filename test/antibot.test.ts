@@ -44,9 +44,11 @@ test("detectAntibotBlock: vendor challenge body (Cloudflare markers) on a 503 �
   assert.equal(detectAntibotBlock(result(503, { hasChallengeBody: true }))?.signal, "challenge-body");
 });
 
-test("detectAntibotBlock: vendor cookie + vendor attribution → fires", () => {
-  const r = result(429, { hasChallengeCookie: true, serverVendor: "cloudflare", hasCfRay: true });
-  assert.equal(detectAntibotBlock(r)?.signal, "cloudflare-challenge-cookie");
+test("detectAntibotBlock: a vendor challenge cookie ALONE does NOT fire (set on ordinary CF-served pages)", () => {
+  // __cf_bm / datadome / _px cookies are set on non-challenge pages too, so a
+  // cookie — even with cf-ray/server attribution — is not a challenge signal.
+  assert.equal(detectAntibotBlock(result(429, { hasChallengeCookie: true, serverVendor: "cloudflare", hasCfRay: true })), null);
+  assert.equal(detectAntibotBlock(result(403, { hasChallengeCookie: true, serverVendor: "none" })), null);
 });
 
 test("detectAntibotBlock: ordinary 403 auth wall (no vendor signals) → does NOT fire", () => {
@@ -57,14 +59,9 @@ test("detectAntibotBlock: ordinary 503 service-unavailable → does NOT fire", (
   assert.equal(detectAntibotBlock(result(503)), null);
 });
 
-test("detectAntibotBlock: vendor signals but status 200 → does NOT fire (status not in the anti-bot set)", () => {
-  assert.equal(detectAntibotBlock(result(200, { hasCfMitigated: true, hasChallengeBody: true })), null);
-});
-
-test("detectAntibotBlock: vendor cookie WITHOUT vendor attribution → does NOT fire", () => {
-  // A bare cookie with no server/cf-ray attribution is not enough (could be a
-  // colliding cookie name on a non-vendor site).
-  assert.equal(detectAntibotBlock(result(403, { hasChallengeCookie: true, serverVendor: "none", hasCfRay: false })), null);
+test("detectAntibotBlock: vendor signals at status 200 → FIRES (a challenge interstitial can be served at 200)", () => {
+  assert.equal(detectAntibotBlock(result(200, { hasCfMitigated: true }))?.signal, "cf-mitigated");
+  assert.equal(detectAntibotBlock(result(200, { hasChallengeBody: true }))?.signal, "challenge-body");
 });
 
 test("detectAntibotBlock: no antibot evidence at all → does NOT fire", () => {
