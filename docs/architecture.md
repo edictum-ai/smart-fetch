@@ -86,7 +86,12 @@ captatum(url, { prompt?, output?, schema?, budget?, transform?, maxBytes?, timeo
   not active for HTTPS until a checked-IP + original TLS identity path is proven
   through `wreq-js`.
 - **Tier-2** adapters resolve via a platform's public API when detected. Optional
-  and general; endpoints live in adapter code/fixtures.
+  and general; endpoints live in adapter code/fixtures. **Shipped: ATS list-all-jobs**
+  (Greenhouse/Lever/Ashby) — a career-board URL on an ATS host is detected, the board
+  token is sanitized (fail-closed slug charset), and the public list API is fetched
+  through `FetcherPort` (SSRF-safe) and normalized to a bounded roster envelope
+  (`{platform, board, jobCount, truncated, jobs[]}`, descriptions dropped). On no
+  detection or any failure, the request falls through to the generic Tier-1 path.
 - **Tier-3** renders with Playwright when Tier-1 finds an empty SPA shell or no
   usable structured data (client-rendered React/Vue/Svelte, JS-only docs/demos,
   anti-bot interstitials, embedded third-party widgets). Gated by `allowRender`

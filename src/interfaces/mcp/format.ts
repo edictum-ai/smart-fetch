@@ -10,9 +10,19 @@ import { redactSignedQueryParams } from "../../infrastructure/llm/safety.ts";
  */
 export function resultToMcpText(result: Result): string {
   const provenance = provenanceLine(result);
-  if (result.output === "raw") return `${provenance}\n${result.result}`;
+  if (result.output === "raw") {
+    // A raw Tier-2 roster (any application/json body) must stay parseable JSON for clients that read
+    // content[0].text as JSON, so omit the comment for JSON bodies (it remains in structuredContent).
+    // HTML/text raw bodies still get the prepended provenance line.
+    if (isJsonBody(result)) return result.result;
+    return `${provenance}\n${result.result}`;
+  }
   const header = envelopeHeader(result);
   return header ? `${provenance}\n\n${header}\n\n${result.result}` : `${provenance}\n${result.result}`;
+}
+
+function isJsonBody(result: Result): boolean {
+  return result.contentType.toLowerCase().startsWith("application/json");
 }
 
 /**

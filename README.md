@@ -37,13 +37,13 @@ The wedge is **coverage**: captatum fetches pages other tools can't. `WebFetch` 
 
 ¹ **Honest scope:** the `wreq-js` TLS/JA3+JA4 fingerprint is active for **plain HTTP only**; HTTPS uses a checked-IP Node path (no fingerprint) to preserve rebinding-proof SSRF. So Captatum does **not** bypass Cloudflare/Akamai/PerimeterX challenge walls over HTTPS — instead it **detects them and reports `access.gated` + `gateReason: captcha` + the provider** rather than silently returning the challenge page ([#41](https://github.com/edictum-ai/captatum/issues/41), shipped as honest detection). A browser-bypass was researched and found **not viable** for a self-hosted tool (the datacenter-IP ASN wall + the OSS-stealth treadmill) — see `docs/specs/issue-41-design.md`. See [Security: scope and limits](#security-scope-and-limits).
 
-**Not for:** Captatum is the best tool for the **hard single-URL fetch + structured extract** (a job description, a dynamic doc, a product page). It is *not* a batch crawler at scale, a search engine, or a PDF/office parser — though bounded site fetches (e.g. every job on a career site via the ATS API, [#42](https://github.com/edictum-ai/captatum/issues/42)) are on the roadmap.
+**Not for:** Captatum is the best tool for the **hard single-URL fetch + structured extract** (a job description, a dynamic doc, a product page). It is *not* a batch crawler at scale, a search engine, or a PDF/office parser. Bounded, single-call roster fetches *are* supported: pass a Greenhouse/Lever/Ashby career-board URL and Captatum returns every open role as clean structured JSON via the ATS's public list API ([#42](https://github.com/edictum-ai/captatum/issues/42)).
 
 ## Features
 
 - **Adaptive 3-tier pipeline** — only the work each page needs.
   - **Tier 1 (default)** — `wreq-js` fetch (HTTP TLS/JA3 fingerprint; HTTPS uses the checked-IP Node path — see the honest scope) + raw-HTML structured extraction (JSON-LD, Open Graph, Twitter, meta, canonical, app-state, images). Resolves most pages with no browser.
-  - **Tier 2 (optional)** — platform-adapter short-circuit (e.g. Ashby job boards) → clean JSON.
+  - **Tier 2 (optional)** — platform-adapter short-circuit: ATS list-all-jobs (Greenhouse/Lever/Ashby career-board URL → every open role as clean structured JSON via the public board API, no HTML crawling).
   - **Tier 3 (gated)** — Playwright Chromium render, lazy, only for empty SPA shells. Gated behind `allowRender` (**default `false`**) so a bare call never spawns a browser.
 - **Honest default output** — `output: raw` (the default when no transform provider is configured) returns clean content with no LLM; `output: summary` (the default when a provider is configured) routes through a free-model router (OpenRouter) or local Ollama; `output: extract` returns schema-validated JSON.
 - **Provenance first-class** — every response carries `tier`, `finalUrl`, `redirects[]`, `jsRequired`, `platform`, a lean `transform` (provider/model/free/in/out tokens), and `attempts[]`.

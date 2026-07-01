@@ -1,0 +1,58 @@
+{
+  "jobs": [
+    {
+      "id": "1225fa3d-d590-41d2-b798-ef927320fb2e",
+      "title": "Senior Backend Engineer (Data Infrastructure)",
+      "department": "Engineering",
+      "team": "Engineering",
+      "employmentType": "FullTime",
+      "location": "Europe",
+      "isRemote": true,
+      "workplaceType": "Hybrid",
+      "publishedAt": "2026-02-17T17:52:58.822+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/langfuse/1225fa3d-d590-41d2-b798-ef927320fb2e",
+      "applyUrl": "https://jobs.ashbyhq.com/langfuse/1225fa3d-d590-41d2-b798-ef927320fb2e/application",
+      "shouldDisplayCompensationOnJobPostings": true,
+      "compensation": {
+        "scrapeableCompensationSalarySummary": "€90K - €160K",
+        "compensationTierSummary": "€90K – €160K • Offers Equity"
+      }
+    },
+    {
+      "id": "190c710e-c00c-4b76-82ce-9033b51b7086",
+      "title": "Developer Relations Engineer (Events & Community)",
+      "department": "Growth",
+      "team": "Growth",
+      "employmentType": "FullTime",
+      "location": "Europe + San Francisco",
+      "isRemote": null,
+      "workplaceType": null,
+      "publishedAt": "2026-05-27T19:05:45.049+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/langfuse/190c710e-c00c-4b76-82ce-9033b51b7086",
+      "applyUrl": "https://jobs.ashbyhq.com/langfuse/190c710e-c00c-4b76-82ce-9033b51b7086/application",
+      "shouldDisplayCompensationOnJobPostings": false,
+      "compensation": {
+        "scrapeableCompensationSalarySummary": null,
+        "compensationTierSummary": null
+      }
+    },
+    {
+      "id": "1bc2e248-89e7-41d7-b32f-08e9320eb5d0",
+      "title": "Senior Cloud Infrastructure Engineer",
+      "department": "Engineering",
+      "team": "Engineering",
+      "employmentType": "FullTime",
+      "location": "Europe",
+      "isRemote": true,
+      "workplaceType": "Hybrid",
+      "publishedAt": "2026-05-27T18:55:31.238+00:00",
+      "jobUrl": "https://jobs.ashbyhq.com/langfuse/1bc2e248-89e7-41d7-b32f-08e9320eb5d0",
+      "applyUrl": "https://jobs.ashbyhq.com/langfuse/1bc2e248-89e7-41d7-b32f-08e9320eb5d0/application",
+      "shouldDisplayCompensationOnJobPostings": true,
+      "compensation": {
+        "scrapeableCompensationSalarySummary": "€90K - €160K",
+        "compensationTierSummary": "€90K – €160K • Offers Equity"
+      }
+    }
+  ]
+}

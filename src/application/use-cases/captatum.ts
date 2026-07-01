@@ -1,10 +1,13 @@
-import { STATUS_CODES } from "node:http";
 import type { FetcherPort, FetcherResult, RejectResult } from "../ports/fetcher.ts";
 import type { ClockPort } from "../ports/clock.ts";
 import type { RenderPort } from "../ports/renderer.ts";
 import { TransformError, type TransformPort, type TransformResult } from "../ports/transformer.ts";
 import type { Platform } from "../../domain/platform.ts";
-import { computeProvenanceHash, type Result } from "../../domain/result.ts";
+import { type Result } from "../../domain/result.ts";
+import type { PlatformAdapterRegistry } from "../ports/platform-adapter.ts";
+import { createAdapterRegistry } from "../adapters.ts";
+import { tryTier2ShortCircuit } from "./tier2.ts";
+import { elapsed, stampTotals, unexpectedReject } from "./captatum-util.ts";
 import {
   extractTier1FromFetchResult,
   type HtmlExtractor,
@@ -37,6 +40,8 @@ export interface CaptatumDeps {
   clock: ClockPort;
   transformer?: TransformPort;
   renderer?: RenderPort;
+  /** Tier-2 platform-adapter registry; defaults to createAdapterRegistry() (ATS list APIs). */
+  adapters?: PlatformAdapterRegistry;
   defaults?: Partial<CaptatumDefaults>;
 }
 
@@ -46,6 +51,7 @@ export class CaptatumUseCase {
   private readonly clock: ClockPort;
   private readonly transformer?: TransformPort;
   private readonly renderer?: RenderPort;
+  private readonly adapters: PlatformAdapterRegistry;
   private readonly defaults: CaptatumDefaults;
 
   constructor(deps: CaptatumDeps) {
@@ -54,6 +60,7 @@ export class CaptatumUseCase {
     this.clock = deps.clock;
     this.transformer = deps.transformer;
     this.renderer = deps.renderer;
+    this.adapters = deps.adapters ?? createAdapterRegistry();
     this.defaults = { ...DEFAULT_CAPTATUM_DEFAULTS, ...deps.defaults };
     this.defaults.defaultOutput = deps.defaults?.defaultOutput ?? (!deps.transformer || (typeof deps.transformer.hasProvider === "function" && !deps.transformer.hasProvider()) ? "raw" : "summary");
   }
@@ -63,9 +70,12 @@ export class CaptatumUseCase {
   async execute(input: unknown, context: CaptatumContext = {}): Promise<Result> {
     const request = normalizeCaptatumInput(input, this.defaults);
     const startMs = this.clock.nowMs();
-    const fetchStartMs = startMs;
-    // Tier-2: resolve Ashby-embed careers pages (e2b.dev/careers?ashby_jid=…)
-    // to the direct Ashby job URL, which serves a clean JobPosting JSON-LD at Tier-1.
+    // Tier-2 short-circuit: a registered platform adapter (ATS list APIs) may resolve the URL to clean JSON, bypassing the generic fetch/render.
+    const tier2 = await tryTier2ShortCircuit({ adapters: this.adapters, url: request.url, now: new Date(startMs).toISOString(), fetcher: this.fetcher, clock: this.clock, fetchedAt: context.fetchedAt, maxBytes: request.maxBytes, timeoutMs: request.timeoutMs, maxHops: request.maxHops });
+    if (tier2) return this.applyOutputMode(tier2, request, startMs, tier2.timings.fetchMs);
+    // Re-base the Tier-1 timer after the Tier-2 short-circuit, so a miss that did a real API fetch (404/truncated/timeout) doesn't inflate the Tier-1 attempt's fetchMs. `startMs` stays the total baseline.
+    const fetchStartMs = this.clock.nowMs();
+    // Tier-2: resolve Ashby-embed careers pages (?ashby_jid=…) to the direct Ashby job URL (clean JobPosting JSON-LD at Tier-1).
     const ashbyResolved = await resolveAshbyEmbedUrl(request.url, this.fetcher, {
       maxBytes: request.maxBytes,
       timeoutMs: request.timeoutMs,
@@ -82,10 +92,12 @@ export class CaptatumUseCase {
     } catch (error) {
       fetched = unexpectedReject(error);
     }
-    const fetchMs = elapsed(fetchStartMs, this.clock.nowMs());
+    const fetchedNow = this.clock.nowMs();
+    const fetchMs = elapsed(fetchStartMs, fetchedNow);
 
     if ("rejected" in fetched) {
-      return rejectResult(request, fetched, fetchMs, fetchMs, context.fetchedAt);
+      // totalMs spans from startMs (incl. the Tier-2 attempt); fetchMs stays scoped to the Tier-1 fetch.
+      return rejectResult(request, fetched, fetchMs, elapsed(startMs, fetchedNow), context.fetchedAt);
     }
 
     const base = await extractTier1FromFetchResult({
@@ -134,7 +146,9 @@ export class CaptatumUseCase {
       base.output = "raw";
       base.transform = { provider: "none", reason: "unconfigured" };
       base.timings.transformMs = 0;
-      base.result = fallbackExcerpt(base.result);
+      // A Tier-2 result is a structured roster (contentType application/json); a failed/absent
+      // summary must NOT byte-slice it mid-object. Return the bounded roster intact (output raw).
+      if (base.tier !== 2) base.result = fallbackExcerpt(base.result);
       stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
       return base;
     }
@@ -162,10 +176,13 @@ export class CaptatumUseCase {
       base.transform = { provider: "none", reason: "failed", latencyMs: transformMs };
       base.timings.transformMs = transformMs;
       base.errors.push({ code: transformErrorCode(error), message: errorMessage(error, "Transform failed") });
-      base.result = fallbackExcerpt(base.result);
+      // A Tier-2 result is a structured roster (contentType application/json); a failed/absent
+      // summary must NOT byte-slice it mid-object. Return the bounded roster intact (output raw).
+      if (base.tier !== 2) base.result = fallbackExcerpt(base.result);
       stampTotals(base, elapsed(startMs, this.clock.nowMs()), fetchMs);
       return base;
     }
+    const originalResult = base.result; // preserve the resolved content (a Tier-2 roster) before the rewrite below
     base.result = transformed.result;
     base.output = transformed.info.provider === "none" ? "raw" : request.requestedOutput;
     base.transform = transformed.info;
@@ -177,8 +194,11 @@ export class CaptatumUseCase {
         message: `Primary model(s) ${transformed.info.fallbackFrom} failed; produced this ${base.output} with ${transformed.info.model ?? transformed.info.provider}. It may be lower quality — retry if it looks off.`,
       });
     }
-    // Token-safe: bound a raw fallback so a failed summary does not dump the whole page.
-    if (transformed.info.provider === "none") base.result = fallbackExcerpt(base.result);
+    // No summary was produced. For a Tier-2 roster, restore the parseable JSON roster (transformed.result
+    // is the preambled LLM input, not valid JSON); for pages, bound the fallback to a token-safe excerpt.
+    if (transformed.info.provider === "none") {
+      base.result = base.tier === 2 ? originalResult : fallbackExcerpt(base.result);
+    }
     // Non-fatal advisory: extract returned parsed JSON that violated the requested schema.
     if (transformed.info.schemaIssue) {
       base.errors.push({ code: "extract_schema_invalid", message: transformed.info.schemaIssue });
@@ -227,24 +247,4 @@ function rejectResult(
     errors: [{ code: rejected.code, message: rejected.message }],
     ...(fetchedAt !== undefined ? { fetchedAt } : {}),
   };
-}
-
-function stampTotals(result: Result, totalMs: number, fetchMs: number): void {
-  result.durationMs = totalMs;
-  result.timings.totalMs = totalMs;
-  result.timings.fetchMs = fetchMs;
-  result.codeText = result.code === 0 ? result.codeText : STATUS_CODES[result.code] ?? "";
-  result.provenanceHash = computeProvenanceHash(result);
-}
-
-function unexpectedReject(error: unknown): RejectResult {
-  return {
-    rejected: true,
-    code: "network_error",
-    message: errorMessage(error, "Fetch failed before a safe response was available"),
-  };
-}
-
-function elapsed(startMs: number, endMs: number): number {
-  return Math.max(0, Math.round(endMs - startMs));
 }
