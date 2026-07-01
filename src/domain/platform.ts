@@ -15,6 +15,11 @@ export interface ResolveInput {
   url: string;
   /** Caller-injected ISO timestamp; no Date.now() in core. */
   now: string;
+  /** Caller-inherited fetch caps (already clamped to the server hard cap upstream). Adapters apply
+   *  min(cap, platform limit) so a Tier-2 fetch cannot bypass the caller's budget. Optional. */
+  maxBytes?: number;
+  timeoutMs?: number;
+  maxHops?: number;
 }
 
 export interface ResolveResult {
@@ -25,6 +30,12 @@ export interface ResolveResult {
   redirects: Array<{ url: string; status: number }>;
   structured?: StructuredData;
   title?: string;
+  /** Bytes fetched from the platform API to produce this resolution — egress/audit
+   *  provenance, mirroring FetcherResult.bytes (NOT the normalized output size). */
+  bytes?: number;
+  /** sha256 over the RAW fetched API payload — content-addressable evidence of what was
+   *  retrieved (the normalized roster drops fields, so it cannot attest the fetched bytes). */
+  contentSha256?: string;
 }
 
 export interface StructuredData {

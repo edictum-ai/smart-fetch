@@ -254,7 +254,7 @@ test("output extract invalid JSON returns structured error and keeps fetch prove
     fetcher: new FakeFetcher(fetchResult({ html: "<main>extract</main>", finalUrl: "https://extract.test/final", redirects })),
     extractHtml: new FakeExtractor(extraction({ text: "Original clean content" })).extract,
     transformer,
-    clock: new FakeClock([0, 4, 5, 5, 9, 9]),
+    clock: new FakeClock([0, 0, 4, 5, 5, 9, 9]),
   }).execute({ url: "https://extract.test/start", output: "extract", schema: { type: "object" } });
 
   assert.equal(result.output, "raw");

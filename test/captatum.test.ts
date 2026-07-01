@@ -28,7 +28,7 @@ test("successful Tier-1 fetch plus extraction returns Result provenance", async 
   const result = await createCaptatumUseCase({
     fetcher,
     extractHtml: extractor.extract,
-    clock: new FakeClock([100, 112, 115, 115]),
+    clock: new FakeClock([100, 100, 112, 115, 115]),
   }).execute({
     url: "http://example.test/start#secret",
     output: "raw",
@@ -87,7 +87,7 @@ test("guarded-fetch reject returns structured error and short-circuits extractio
   const result = await createCaptatumUseCase({
     fetcher,
     extractHtml: extractor.extract,
-    clock: new FakeClock([0, 7]),
+    clock: new FakeClock([0, 0, 7]),
   }).execute({ url: "https://blocked.test/private" });
 
   assert.equal(extractor.calls.length, 0, "blocked fetch short-circuited extraction");
@@ -120,7 +120,7 @@ test("invalid input is rejected before fetch, extraction, transform, or render",
       extractHtml: extractor.extract,
       transformer,
       renderer,
-      clock: new FakeClock([0]),
+      clock: new FakeClock([0, 0]),
     }).execute({ url: "file:///etc/passwd" }),
     (error) => {
       assert.equal(error instanceof CaptatumInputError, true);
@@ -143,7 +143,7 @@ test("output raw returns clean content without transform", async () => {
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Raw</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Clean raw content" })).extract,
     transformer,
-    clock: new FakeClock([0, 3, 4, 4]),
+    clock: new FakeClock([0, 0, 3, 4, 4]),
   }).execute({ url: "https://raw.test/", output: "raw" });
 
   assert.equal(result.output, "raw");
@@ -158,7 +158,7 @@ test("default output is raw when no transform provider is configured (no silent 
   const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Summary</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Raw fallback content" })).extract,
-    clock: new FakeClock([10, 14, 15, 15]),
+    clock: new FakeClock([10, 10, 14, 15, 15]),
   }).execute({ url: "https://summary.test/" });
 
   assert.equal(result.output, "raw");
@@ -178,7 +178,7 @@ test("a transformer that omits hasProvider is treated as configured (summary def
     fetcher: new FakeFetcher(fetchResult({ html: "<main>body</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "page body" })).extract,
     transformer: transformer as never,
-    clock: new FakeClock([0, 1, 2, 2]),
+    clock: new FakeClock([0, 0, 1, 2, 2]),
   }).execute({ url: "https://custom.test/" });
 
   assert.equal(result.output, "summary");
@@ -189,7 +189,7 @@ test("summary requested with no transformer degrades to raw with unconfigured pr
   const result = await createCaptatumUseCase({
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Summary</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Raw fallback content" })).extract,
-    clock: new FakeClock([10, 14, 15, 15]),
+    clock: new FakeClock([10, 10, 14, 15, 15]),
   }).execute({ url: "https://summary.test/", output: "summary" });
 
   assert.equal(result.output, "raw");
@@ -208,7 +208,7 @@ test("allowRender defaults false and render port is not called on shell gate", a
       shellReason: "empty-spa-shell",
     })).extract,
     renderer,
-    clock: new FakeClock([0, 5, 6, 6]),
+    clock: new FakeClock([0, 0, 5, 6, 6]),
   }).execute({ url: "https://spa.test/", output: "raw" });
 
   assert.equal(renderer.calls.length, 0);
@@ -250,7 +250,7 @@ test("allowRender true renders shell and returns Tier-3 provenance", async () =>
     })),
     extractHtml: extractor.extract,
     renderer,
-    clock: new FakeClock([0, 5, 6, 7, 19, 20, 21]),
+    clock: new FakeClock([0, 0, 5, 6, 7, 19, 20, 21]),
   }).execute({ url: "https://spa.test/", output: "raw", allowRender: true });
 
   assert.equal(renderer.calls.length, 1);
@@ -279,7 +279,7 @@ test("configured transform receives prompt, schema, budget, and transform overri
     fetcher: new FakeFetcher(fetchResult({ html: "<main>Transform</main>" })),
     extractHtml: new FakeExtractor(extraction({ text: "Source content" })).extract,
     transformer,
-    clock: new FakeClock([20, 25, 27, 27, 30, 30]),
+    clock: new FakeClock([20, 20, 25, 27, 27, 30, 30]),
   }).execute({
     url: "https://transform.test/",
     output: "summary",
