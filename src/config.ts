@@ -13,6 +13,9 @@ export const config = {
     forwardDesignVersion: "2026-07-28",
     allowedHosts: () => envList("MCP_ALLOWED_HOSTS"),
     allowedOrigins: () => envList("MCP_ALLOWED_ORIGINS"),
+    /** #45: "clientId=profile,..." mapping for client-aware output shaping (parsed by
+     *  src/application/client-profile.ts). Unknown clientIds → the default shape. */
+    clientProfiles: () => envString("CAPTATUM_CLIENT_PROFILES", ""),
   },
   cloudflareAccess: {
     enabled: () => envString("CF_ACCESS_ENABLED", "false") === "true",
