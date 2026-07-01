@@ -20,6 +20,8 @@ import type { Result } from "../../domain/result.ts";
 import { resultToMcpText } from "./format.ts";
 import { buildStructuredContent } from "./shape.ts";
 import { CAPTATUM_SERVER_INSTRUCTIONS, CAPTATUM_TOOL_NAME, captatumToolDefinition } from "./schema.ts";
+import { config } from "../../config.ts";
+import { parseClientProfileMap, resolveClientProfile, type ClientProfile } from "../../application/client-profile.ts";
 
 const AUTH_JSONRPC_CODE = -32001;
 
@@ -31,6 +33,9 @@ export interface CaptatumMcpServerDeps {
 }
 
 export function createCaptatumMcpServer(deps: CaptatumMcpServerDeps): Server {
+  // #45: resolve the client-aware output profile once per server. The hosted path builds a server
+  // per authorized request, so this is effectively per-request; unknown/local clientId → default.
+  const profile = resolveClientProfile(deps.auth.clientId, parseClientProfileMap(config.mcp.clientProfiles()));
   const server = new Server({ name: "captatum", version: "0.2.0" }, {
     capabilities: { tools: { listChanged: false } },
     instructions: CAPTATUM_SERVER_INSTRUCTIONS,
@@ -44,13 +49,13 @@ export function createCaptatumMcpServer(deps: CaptatumMcpServerDeps): Server {
     if (request.params.name !== CAPTATUM_TOOL_NAME) {
       throw new McpError(ErrorCode.InvalidParams, `Tool ${request.params.name} not found`);
     }
-    return await callCaptatum(request.params.arguments, deps);
+    return await callCaptatum(request.params.arguments, deps, profile);
   });
 
   return server;
 }
 
-async function callCaptatum(args: unknown, deps: CaptatumMcpServerDeps): Promise<CallToolResult> {
+async function callCaptatum(args: unknown, deps: CaptatumMcpServerDeps, profile: ClientProfile): Promise<CallToolResult> {
   const started = deps.clock.nowMs();
   try {
     const normalized = normalizeCaptatumInput(args);
@@ -64,7 +69,7 @@ async function callCaptatum(args: unknown, deps: CaptatumMcpServerDeps): Promise
       process.stderr.write(`captatum: audit write failed: ${auditError instanceof Error ? auditError.message : auditError}\n`);
     }
     return {
-      content: [{ type: "text", text: resultToMcpText(result) }],
+      content: [{ type: "text", text: resultToMcpText(result, profile.textDebug && normalized.debug) }],
       structuredContent: buildStructuredContent(result, normalized.debug),
     };
   } catch (error) {

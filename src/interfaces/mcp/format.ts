@@ -8,17 +8,42 @@ import { redactSignedQueryParams } from "../../infrastructure/llm/safety.ts";
  * outputs), then the result body. Raw output is unchanged so the contract
  * fixtures (all raw) stay byte-identical.
  */
-export function resultToMcpText(result: Result): string {
+export function resultToMcpText(result: Result, includeTextDebug = false): string {
   const provenance = provenanceLine(result);
   if (result.output === "raw") {
     // A raw Tier-2 roster (any application/json body) must stay parseable JSON for clients that read
     // content[0].text as JSON, so omit the comment for JSON bodies (it remains in structuredContent).
-    // HTML/text raw bodies still get the prepended provenance line.
+    // HTML/text raw bodies still get the prepended provenance line. (Debug-in-text never applies to
+    // raw — the caller asked for clean content.)
     if (isJsonBody(result)) return result.result;
     return `${provenance}\n${result.result}`;
   }
   const header = envelopeHeader(result);
-  return header ? `${provenance}\n\n${header}\n\n${result.result}` : `${provenance}\n${result.result}`;
+  const base = header ? `${provenance}\n\n${header}\n\n${result.result}` : `${provenance}\n${result.result}`;
+  // #45: for text-forward clients (which render content[0].text but not structuredContent), surface a
+  // compact diagnostics block inline so `debug:true` is actually visible there.
+  return includeTextDebug ? `${base}\n\n${debugTextBlock(result)}` : base;
+}
+
+/**
+ * A compact, human-readable diagnostics block for the TEXT channel (text-forward clients, debug on).
+ * Mirrors the subset of the debug `structuredContent` fields that matter for triaging a fetch, so a
+ * connector that can't render structuredContent still sees how the result was produced.
+ */
+function debugTextBlock(result: Result): string {
+  const lines: string[] = [
+    "--- debug ---",
+    `tier: ${result.tier}  resolvedVia: ${result.resolvedVia}  status: ${result.code}  bytes: ${result.bytes}  durationMs: ${result.durationMs}  jsRequired: ${result.jsRequired}`,
+  ];
+  for (const a of result.attempts) {
+    lines.push(`attempt ${a.step}: tier ${a.tier} ${a.outcome}${a.status !== undefined ? ` ${a.status}` : ""} ${a.durationMs}ms${a.reason ? ` (${a.reason})` : ""}`);
+  }
+  if (result.transform) {
+    const t = result.transform;
+    lines.push(`transform: ${t.provider}${t.model ? ` ${t.model}` : ""}${t.reason ? ` (${t.reason})` : ""}${t.inTokens !== undefined ? ` in=${t.inTokens}` : ""}${t.outTokens !== undefined ? ` out=${t.outTokens}` : ""}${t.fallbackFrom ? ` fallbackFrom=${t.fallbackFrom}` : ""}`);
+  }
+  if (result.contentSha256) lines.push(`contentSha256: ${result.contentSha256}`);
+  return lines.join("\n");
 }
 
 function isJsonBody(result: Result): boolean {
