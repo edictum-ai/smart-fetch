@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0] — 2026-07-01
+
+Ships the ATS list-all-jobs Tier-2 adapters + client-aware shaping to `npx` users, and fixes the release workflow (the GitHub Releases page entry) + stale release-version doc refs.
+
+- **feat(tier2): ATS list-all-jobs adapters** (#42, #58) — a career-board URL on an ATS host (Greenhouse/Lever/Ashby) resolves to a bounded structured roster via the platform's public list API in one call (no HTML crawl, no browser). Coverage moat: a generic fetch of `jobs.lever.co/<site>` returns a JS shell; Captatum returns every role as clean JSON. Detection is URL-host (board roots + exact list-API endpoints); single-job, `?gh_jid=`, `?ashby_jid=`, explicit-port, + non-canonical API URLs fall through to Tier-1. Every egress routes through the rebinding-proof `FetcherPort`; tokens fail-closed sanitized; input capped before normalizing (DoS-safe); roster ≤500.
+- **feat(mcp): client-aware shaping** (#45, #59) — config-driven output shaping per OAuth `client_id` (`CAPTATUM_CLIENT_PROFILES`). The `text-forward` profile surfaces a compact diagnostics block in `content[0].text` when `debug` is on — fixes "debug:true does nothing in Claude Code" (debug landed only in `structuredContent`, which Claude Code doesn't render). Default for unknown/local clients = today's shape (additive, backward-compatible).
+- **ci(release): create the GitHub Releases page entry** — `release.yml` built images + published npm on every tag but never created the Releases page entry (only v0.2.0 had one); added a `release-entry` job (`gh release create --generate-notes`).
+- **docs: refresh release-version references** — the README deploy example (`CAPTATUM_TAG`) and `SECURITY.md` "latest release" line were stale at vv0.2.2; now track the current release.
+
 ## [0.3.0] — 2026-07-01
 
 First release shipping the post-0.2.2 safety, anti-bot, extraction, and default-output

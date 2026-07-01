@@ -103,3 +103,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build        # compile src/*.ts → dist/*.js (Node won't type-strip .ts in node_modules)
       - run: npm publish --access public --provenance
+
+  # Create the GitHub Releases page entry (auto-generated notes) after images + npm publish.
+  # The build/publish jobs above don't create the Releases page entry on their own — without this
+  # step, only a manually-created release (v0.2.0) ever appeared on the Releases page.
+  release-entry:
+    needs: [gate, images, npm]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pass the tag through an env var (set by the runner) — NOT interpolated into the `run:`
+          # script. github.ref_name is attacker-controlled (tag names can hold $(…) which GitHub
+          # expands before the shell starts, even inside double quotes), so referencing $TAG as a
+          # shell variable is the injection-safe form.
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --generate-notes --title "$TAG"
